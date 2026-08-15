@@ -1,0 +1,56 @@
+/*
+ * Design tokens. Components consume these custom properties — never hardcode
+ * a color, spacing, or font value directly in a component's <style> block.
+ * Intentionally minimal for Phase 2: enough tokens to establish the pattern,
+ * not a full design system.
+ */
+:root {
+  /* Color — neutral */
+  --color-bg: #ffffff;
+  --color-surface: #f8fafc;
+  --color-border: #e2e8f0;
+  --color-text: #0f172a;
+  --color-text-muted: #64748b;
+
+  /* Color — brand / semantic */
+  --color-primary: #1d4ed8;
+  --color-primary-hover: #1e40af;
+  --color-primary-contrast: #ffffff;
+  --color-danger: #b91c1c;
+  --color-danger-bg: #fef2f2;
+  --color-success: #15803d;
+
+  /* Spacing scale */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+
+  /* Typography */
+  --font-family-base: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.75rem;
+  --font-weight-normal: 400;
+  --font-weight-semibold: 600;
+  --line-height-base: 1.5;
+
+  /* Radius / elevation */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 8%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #0f172a;
+    --color-surface: #1e293b;
+    --color-border: #334155;
+    --color-text: #f1f5f9;
+    --color-text-muted: #94a3b8;
+    --color-danger-bg: #451a1a;
+  }
+}

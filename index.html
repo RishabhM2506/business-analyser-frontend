@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!--
+      Content-Security-Policy — reasonably strict default, not final.
+
+      A <meta> CSP cannot set `frame-ancestors`, `report-uri`/`report-to`, or
+      `sandbox` (the CSP spec ignores those in a meta element) — this is a
+      client-side floor, not a replacement for a header-based CSP set by
+      whatever serves this in production. Add the equivalent header at the
+      hosting/edge layer once that's decided.
+
+      `style-src 'unsafe-inline'` is a deliberate, scoped exception: Vue's
+      `:style` bindings render as inline `style="..."` attributes, which is
+      extremely common and low-risk (CSS cannot execute script). `script-src`
+      has no such exception — no `unsafe-inline`, no `unsafe-eval`.
+
+      TODO(Phase 3): `connect-src` currently allows same-origin only. Once the
+      backend's real deployed origin is known, add it explicitly here rather
+      than loosening to a wildcard.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="
+        default-src 'self';
+        script-src 'self';
+        style-src 'self' 'unsafe-inline';
+        img-src 'self' data:;
+        font-src 'self';
+        connect-src 'self';
+        base-uri 'self';
+        form-action 'self';
+        object-src 'none';
+      "
+    />
+
+    <title>Business Analyser</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
