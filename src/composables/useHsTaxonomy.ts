@@ -39,6 +39,16 @@ export interface UseHsTaxonomyReturn {
    * that step").
    */
   getItemsForCategory: (categoryCode: string) => HsTaxonomyEntry[]
+  /**
+   * Searches level-6 items nested under the given level-2 category (Phase 4
+   * finding M24/PBO-06: large categories like Machinery (538 items) or
+   * Electrical machinery (296) were an unfiltered scroll-only list, unlike
+   * this same MiniSearch-backed pattern already built for `search()`
+   * above). An empty/whitespace-only query returns every item in the
+   * category (already sorted by code) — same "browsable before typing"
+   * behavior as `search()`.
+   */
+  searchItemsInCategory: (categoryCode: string, query: string) => HsTaxonomyEntry[]
 }
 
 const TAXONOMY_URL = `${import.meta.env.BASE_URL}hs-taxonomy.json`
@@ -178,6 +188,48 @@ function getItemsForCategory(categoryCode: string): HsTaxonomyEntry[] {
     .sort(sortByCode)
 }
 
+// Last-used-category cache (size 1): avoids rebuilding the per-category
+// index on every keystroke while searching within the same category —
+// rebuilding it at all is already cheap (the largest real category is 538
+// items, verified against the checked-in taxonomy file), this just skips
+// even that on every keystroke.
+let itemSearchCache: { categoryCode: string; index: MiniSearch<HsTaxonomyEntry> } | null = null
+
+function getItemSearchIndex(categoryCode: string): MiniSearch<HsTaxonomyEntry> {
+  if (itemSearchCache && itemSearchCache.categoryCode === categoryCode) {
+    return itemSearchCache.index
+  }
+  const index = new MiniSearch<HsTaxonomyEntry>({
+    idField: 'hs_code',
+    fields: ['description', 'hs_code'],
+    storeFields: ['hs_code', 'description', 'level', 'section', 'parent'],
+    searchOptions: {
+      prefix: true,
+      fuzzy: 0.2,
+      boost: { description: 2 },
+    },
+  })
+  index.addAll(getItemsForCategory(categoryCode))
+  itemSearchCache = { categoryCode, index }
+  return index
+}
+
+function searchItemsInCategory(categoryCode: string, query: string): HsTaxonomyEntry[] {
+  const trimmed = query.trim()
+  if (!trimmed) {
+    return getItemsForCategory(categoryCode)
+  }
+  return getItemSearchIndex(categoryCode).search(trimmed).map(toEntry)
+}
+
 export function useHsTaxonomy(): UseHsTaxonomyReturn {
-  return { entries, isLoading, error, search, load, getItemsForCategory }
+  return {
+    entries,
+    isLoading,
+    error,
+    search,
+    load,
+    getItemsForCategory,
+    searchItemsInCategory,
+  }
 }

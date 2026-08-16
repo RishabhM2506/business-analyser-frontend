@@ -283,4 +283,59 @@ describe('useHsTaxonomy', () => {
       expect(getItemsForCategory('99')).toEqual([])
     })
   })
+
+  describe('searchItemsInCategory (M24/PBO-06)', () => {
+    it('returns every item in the category for an empty/whitespace query, same as getItemsForCategory', async () => {
+      const useHsTaxonomy = await freshUseHsTaxonomy()
+      mockFetchOnce(FIXTURE_TAXONOMY)
+      const { load, searchItemsInCategory } = useHsTaxonomy()
+      await load()
+
+      expect(searchItemsInCategory('01', '   ').map((e) => e.hs_code)).toEqual(['010121', '010129'])
+    })
+
+    it('filters to only items in the given category matching the query', async () => {
+      const useHsTaxonomy = await freshUseHsTaxonomy()
+      mockFetchOnce(FIXTURE_TAXONOMY)
+      const { load, searchItemsInCategory } = useHsTaxonomy()
+      await load()
+
+      // Only 010129 ("...other than pure-bred breeding animals") contains "other".
+      const results = searchItemsInCategory('01', 'other')
+      expect(results.map((e) => e.hs_code)).toEqual(['010129'])
+    })
+
+    it('never returns a match from a different category, even if it matches the query text', async () => {
+      const useHsTaxonomy = await freshUseHsTaxonomy()
+      mockFetchOnce(FIXTURE_TAXONOMY)
+      const { load, searchItemsInCategory } = useHsTaxonomy()
+      await load()
+
+      // "Sausages" (category 16) should never appear when searching category 01.
+      expect(searchItemsInCategory('01', 'sausages')).toEqual([])
+      expect(searchItemsInCategory('16', 'sausages').map((e) => e.hs_code)).toEqual(['160100'])
+    })
+
+    it('returns an empty array for a query matching nothing in that category', async () => {
+      const useHsTaxonomy = await freshUseHsTaxonomy()
+      mockFetchOnce(FIXTURE_TAXONOMY)
+      const { load, searchItemsInCategory } = useHsTaxonomy()
+      await load()
+
+      expect(searchItemsInCategory('01', 'zzz_no_such_item_zzz')).toEqual([])
+    })
+
+    it('re-indexes correctly when searching a different category than the last one searched (cache invalidation)', async () => {
+      const useHsTaxonomy = await freshUseHsTaxonomy()
+      mockFetchOnce(FIXTURE_TAXONOMY)
+      const { load, searchItemsInCategory } = useHsTaxonomy()
+      await load()
+
+      expect(searchItemsInCategory('01', 'other').map((e) => e.hs_code)).toEqual(['010129'])
+      // Switch to a different category, then back — must not serve a stale
+      // cached index from either prior call.
+      expect(searchItemsInCategory('16', 'sausages').map((e) => e.hs_code)).toEqual(['160100'])
+      expect(searchItemsInCategory('01', 'other').map((e) => e.hs_code)).toEqual(['010129'])
+    })
+  })
 })

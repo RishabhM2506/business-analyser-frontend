@@ -1,10 +1,13 @@
 <script setup lang="ts">
 // Lists HS6 items (level-6 taxonomy rows) under the selected level-2
-// category. No search index here — this step is deliberately "list children
-// of this code" (see useHsTaxonomy's getItemsForCategory), not a search
-// (master brief §3 Phase 3 slice 1). Implements the WAI-ARIA "listbox" (not
-// combobox) pattern: the listbox element itself is the tab stop and carries
-// aria-activedescendant, since there's no separate text input here.
+// category, with a MiniSearch-backed filter (Phase 4 finding M24/PBO-06:
+// large categories like Machinery, 538 items, or Electrical machinery, 296,
+// were an unfiltered scroll-only list — unlike the excellent category-search
+// step). The listbox itself keeps the WAI-ARIA "listbox" (not combobox)
+// pattern: it is a persistently-visible list, not a popup, so the search
+// input is a plain `role="searchbox"` filtering it in place, not a
+// combobox-with-popup — the listbox element itself remains the tab stop and
+// carries aria-activedescendant.
 import { computed, onMounted, ref, useId, watch } from 'vue'
 
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -21,26 +24,52 @@ const MAX_LIST_HEIGHT = 480
 const props = defineProps<{ categoryCode: string }>()
 const emit = defineEmits<{ select: [item: HsTaxonomyEntry] }>()
 
-const { isLoading, error, load, getItemsForCategory } = useHsTaxonomy()
+const { isLoading, error, load, getItemsForCategory, searchItemsInCategory } = useHsTaxonomy()
 
+const query = ref('')
 const activeIndex = ref(-1)
 const listboxId = useId()
+const searchInputId = useId()
+const statusId = useId()
 
 onMounted(() => {
   void load()
 })
 
-const items = computed<HsTaxonomyEntry[]>(() => getItemsForCategory(props.categoryCode))
+// Total items in the category, independent of the search query — used for
+// the count line and to distinguish "genuinely empty category" (EmptyState)
+// from "search matched nothing" (its own, less final-sounding message).
+const allItemsInCategory = computed<HsTaxonomyEntry[]>(() =>
+  getItemsForCategory(props.categoryCode),
+)
+const items = computed<HsTaxonomyEntry[]>(() =>
+  searchItemsInCategory(props.categoryCode, query.value),
+)
 
 watch(items, () => {
   activeIndex.value = -1
 })
+
+// A category switch should also clear any leftover query from the previous category.
+watch(
+  () => props.categoryCode,
+  () => {
+    query.value = ''
+  },
+)
 
 const activeOptionId = computed(() =>
   activeIndex.value >= 0 && activeIndex.value < items.value.length
     ? optionId(activeIndex.value)
     : undefined,
 )
+
+const statusMessage = computed(() => {
+  if (!query.value.trim()) {
+    return ''
+  }
+  return `${items.value.length} item${items.value.length === 1 ? '' : 's'} match your search.`
+})
 
 function optionId(index: number): string {
   return `${listboxId}-option-${index}`
@@ -86,10 +115,38 @@ function onKeydown(event: KeyboardEvent): void {
   <div class="item-list">
     <LoadingState v-if="isLoading" message="Loading HS items…" />
     <ErrorState v-else-if="error" :message="error.message" @retry="() => load()" />
-    <EmptyState v-else-if="items.length === 0" message="No items found in this category." />
+    <EmptyState
+      v-else-if="allItemsInCategory.length === 0"
+      message="No items found in this category."
+    />
     <template v-else>
-      <p class="item-list__count">{{ items.length }} item{{ items.length === 1 ? '' : 's' }}</p>
+      <label :for="searchInputId" class="item-list__label">
+        Search items in this category
+        <input
+          :id="searchInputId"
+          v-model="query"
+          type="text"
+          role="searchbox"
+          autocomplete="off"
+          spellcheck="false"
+          class="item-list__search-input"
+          placeholder="e.g. horses, sausages…"
+          :aria-controls="listboxId"
+          :aria-describedby="statusId"
+        />
+      </label>
+      <p :id="statusId" class="visually-hidden" role="status" aria-live="polite">
+        {{ statusMessage }}
+      </p>
+
+      <p class="item-list__count">
+        {{ items.length }} item{{ items.length === 1 ? '' : 's' }}
+        <span v-if="query.trim()">of {{ allItemsInCategory.length }}</span>
+      </p>
+
+      <p v-if="items.length === 0" class="item-list__empty">No items match "{{ query.trim() }}".</p>
       <VirtualList
+        v-else
         :items="items"
         :item-height="ITEM_HEIGHT"
         :max-height="MAX_LIST_HEIGHT"
@@ -135,8 +192,38 @@ function onKeydown(event: KeyboardEvent): void {
   width: 100%;
 }
 
+.item-list__label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
+}
+
+.item-list__search-input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--font-size-base);
+  font-family: inherit;
+}
+
+.item-list__search-input:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
 .item-list__count {
   margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.item-list__empty {
+  padding: var(--space-3);
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
 }

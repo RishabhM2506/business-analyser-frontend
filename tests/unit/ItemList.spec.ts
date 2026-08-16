@@ -122,6 +122,62 @@ describe('ItemList', () => {
     expect(desc.attributes('title')).toBe(LONG_DESCRIPTION)
   })
 
+  describe('search (M24/PBO-06)', () => {
+    it('typing a query filters the item list to matching results only', async () => {
+      const wrapper = await mountLoaded('01')
+      expect(wrapper.findAll('[role="option"]')).toHaveLength(2)
+
+      // Only 010129 ("...other than pure-bred breeding animals") contains "other".
+      const searchInput = wrapper.find('input[role="searchbox"]')
+      await searchInput.setValue('other')
+      await flushPromises()
+
+      const options = wrapper.findAll('[role="option"]')
+      expect(options).toHaveLength(1)
+      expect(options[0]?.text()).toContain('010129')
+      expect(wrapper.text()).toContain('1 item')
+      expect(wrapper.text()).toContain('of 2')
+    })
+
+    it('shows a "no items match" message for a query that matches nothing, distinct from EmptyState', async () => {
+      const wrapper = await mountLoaded('01')
+      const searchInput = wrapper.find('input[role="searchbox"]')
+      await searchInput.setValue('zzz_no_such_item_zzz')
+      await flushPromises()
+
+      expect(wrapper.findAll('[role="option"]')).toHaveLength(0)
+      expect(wrapper.text()).toContain('No items match')
+      // Distinct from the "genuinely empty category" EmptyState message.
+      expect(wrapper.text()).not.toContain('No items found in this category')
+    })
+
+    it('clearing the query restores the full item list', async () => {
+      const wrapper = await mountLoaded('01')
+      const searchInput = wrapper.find('input[role="searchbox"]')
+      await searchInput.setValue('other')
+      await flushPromises()
+      expect(wrapper.findAll('[role="option"]')).toHaveLength(1)
+
+      await searchInput.setValue('')
+      await flushPromises()
+      expect(wrapper.findAll('[role="option"]')).toHaveLength(2)
+    })
+
+    it('switching categoryCode clears any leftover search query from the previous category', async () => {
+      const wrapper = await mountLoaded('01')
+      const searchInput = wrapper.find('input[role="searchbox"]')
+      await searchInput.setValue('other')
+      await flushPromises()
+      expect(wrapper.findAll('[role="option"]')).toHaveLength(1)
+
+      await wrapper.setProps({ categoryCode: '16' })
+      await flushPromises()
+
+      expect((wrapper.find('input[role="searchbox"]').element as HTMLInputElement).value).toBe('')
+      expect(wrapper.findAll('[role="option"]')).toHaveLength(1) // the one item in category 16
+    })
+  })
+
   it('switching categoryCode (e.g. user navigates back and picks a different category) refreshes the list', async () => {
     const wrapper = await mountLoaded('01')
     expect(wrapper.findAll('[role="option"]')).toHaveLength(2)
