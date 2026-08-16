@@ -1,6 +1,6 @@
 import { ref, type Ref } from 'vue'
 
-import { apiRequest } from '@/services/api'
+import { ApiError, apiRequest, isErrorResponseBody } from '@/services/api'
 import { API_URLS } from '@/constants/apis'
 import type {
   CreateThreadResponse,
@@ -62,6 +62,27 @@ export function useThread(): UseThreadReturn {
         params: { threadId: currentThreadId },
         body: query,
       })
+      // Defense in depth (ARCH-01/B1): `services/api.ts`'s response
+      // interceptor already converts an enveloped ErrorResponse into a
+      // rejected ApiError before apiRequest resolves, for every error_code
+      // the real backend actually sends (all use a non-2xx status — see
+      // app/main.py's `_ERROR_STATUS_CODES`), so this should never actually
+      // trigger. It exists for the case that invariant doesn't hold (a
+      // future backend change, or exactly the kind of cross-repo contract
+      // drift this finding was filed over) — without it, an error-shaped
+      // 'final' chunk would silently be treated as a successful
+      // TradeAnalysisResponse below, since ResponseEnvelope's 'final' variant
+      // is typed as always carrying one (TypeScript can't see past that at
+      // runtime).
+      if (isErrorResponseBody(envelope.data)) {
+        throw new ApiError({
+          httpStatus: null,
+          errorCode: envelope.data.error_code,
+          message: envelope.data.message,
+          retryable: envelope.data.retryable,
+          traceId: envelope.data.trace_id,
+        })
+      }
       streaming.handleChunk(envelope)
       if (!streaming.result.value) {
         // v1's backend only ever sends `type: "final"` — reaching here means

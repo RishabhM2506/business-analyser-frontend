@@ -16,6 +16,17 @@
   --color-primary: #1d4ed8;
   --color-primary-hover: #1e40af;
   --color-primary-contrast: #ffffff;
+  /*
+   * A separate token from --color-primary, deliberately (Phase 4 finding
+   * M16/Frontend-QA#4): --color-primary is also used as a *background* with
+   * white foreground text (AppButton's primary variant) — a value light
+   * enough to pass 4.5:1 as *text on the dark page background* would fail
+   * 4.5:1 as a *background under white text* (a lighter blue button reads
+   * clearly worse, computed: white-on-#60a5fa is only 2.54:1). The two roles
+   * can't share one dark-mode value. Same value as --color-primary in light
+   * mode (identical visual result today), independently overridden below.
+   */
+  --color-link: #1d4ed8;
   --color-danger: #b91c1c;
   --color-danger-bg: #fef2f2;
   --color-success: #15803d;
@@ -52,5 +63,20 @@
     --color-text: #f1f5f9;
     --color-text-muted: #94a3b8;
     --color-danger-bg: #451a1a;
+    /*
+     * Phase 4 finding M16/Frontend-QA#4: --color-danger and --color-link
+     * (used as *text*, unlike --color-primary/--color-danger-bg which stay
+     * backgrounds) kept their light-mode values here before this fix — tuned
+     * for a white/near-white background, they collapsed to real WCAG AA
+     * failures once actually placed on this dark background (computed
+     * against the real rendered DOM under dark-mode emulation: error text
+     * 2.29:1, links 2.66:1/1.90:1 — all below the 4.5:1 floor). Both values
+     * below are verified ≥4.5:1 against the backgrounds they're actually
+     * paired with in this file (not guessed):
+     *   #f87171 (danger text) vs #451a1a (--color-danger-bg above) = 5.36:1
+     *   #60a5fa (link text)   vs #0f172a (--color-bg above)        = 7.02:1
+     */
+    --color-danger: #f87171;
+    --color-link: #60a5fa;
   }
 }

@@ -39,11 +39,42 @@ export interface UseHsTaxonomyReturn {
    * that step").
    */
   getItemsForCategory: (categoryCode: string) => HsTaxonomyEntry[]
+  /**
+   * Searches level-6 items nested under the given level-2 category (Phase 4
+   * finding M24/PBO-06: large categories like Machinery (538 items) or
+   * Electrical machinery (296) were an unfiltered scroll-only list, unlike
+   * this same MiniSearch-backed pattern already built for `search()`
+   * above). An empty/whitespace-only query returns every item in the
+   * category (already sorted by code) — same "browsable before typing"
+   * behavior as `search()`.
+   */
+  searchItemsInCategory: (categoryCode: string, query: string) => HsTaxonomyEntry[]
 }
 
 const TAXONOMY_URL = `${import.meta.env.BASE_URL}hs-taxonomy.json`
 const CATEGORY_LEVEL = 2
 const ITEM_LEVEL = 6
+// Matches services/api.ts's REQUEST_TIMEOUT_MS discipline (Phase 4 finding
+// M13/Frontend-Reviewer#2) — this fetch previously had no timeout at all,
+// unlike every other network call in the app, so a stalled connection on
+// this 1.2MB file stranded the user on the very first screen with an
+// infinite spinner and no escape (ErrorState's Retry path only appears once
+// `error.value` is set, which a hang never triggered).
+const TAXONOMY_TIMEOUT_MS = 15_000
+
+/** Duck-typed rather than `instanceof DOMException`: matches this codebase's
+ * established pattern (see `services/api.ts`'s `isErrorResponseBody`) and
+ * avoids depending on `DOMException`'s exact prototype chain, which has
+ * historically varied across environments (browsers vs. Node vs. test
+ * runners). */
+function isAbortError(caught: unknown): boolean {
+  return (
+    typeof caught === 'object' &&
+    caught !== null &&
+    'name' in caught &&
+    caught.name === 'AbortError'
+  )
+}
 
 // Module-level singleton state: the taxonomy (~1.2MB, 6,939 rows) and its
 // search index are loaded and built once per page session, then shared by
@@ -82,8 +113,10 @@ function sortByCode(a: HsTaxonomyEntry, b: HsTaxonomyEntry): number {
 async function fetchTaxonomy(): Promise<void> {
   isLoading.value = true
   error.value = null
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), TAXONOMY_TIMEOUT_MS)
   try {
-    const response = await fetch(TAXONOMY_URL)
+    const response = await fetch(TAXONOMY_URL, { signal: controller.signal })
     if (!response.ok) {
       throw new Error(`Failed to load HS taxonomy data (HTTP ${response.status}).`)
     }
@@ -104,12 +137,17 @@ async function fetchTaxonomy(): Promise<void> {
     entries.value = data
     miniSearch.value = index
   } catch (caught) {
-    error.value = caught instanceof Error ? caught : new Error('Failed to load HS taxonomy data.')
+    error.value = isAbortError(caught)
+      ? new Error('Loading HS categories timed out. Please try again.')
+      : caught instanceof Error
+        ? caught
+        : new Error('Failed to load HS taxonomy data.')
     entries.value = []
     miniSearch.value = null
     throw error.value
   } finally {
     isLoading.value = false
+    clearTimeout(timeoutId)
   }
 }
 
@@ -150,6 +188,48 @@ function getItemsForCategory(categoryCode: string): HsTaxonomyEntry[] {
     .sort(sortByCode)
 }
 
+// Last-used-category cache (size 1): avoids rebuilding the per-category
+// index on every keystroke while searching within the same category —
+// rebuilding it at all is already cheap (the largest real category is 538
+// items, verified against the checked-in taxonomy file), this just skips
+// even that on every keystroke.
+let itemSearchCache: { categoryCode: string; index: MiniSearch<HsTaxonomyEntry> } | null = null
+
+function getItemSearchIndex(categoryCode: string): MiniSearch<HsTaxonomyEntry> {
+  if (itemSearchCache && itemSearchCache.categoryCode === categoryCode) {
+    return itemSearchCache.index
+  }
+  const index = new MiniSearch<HsTaxonomyEntry>({
+    idField: 'hs_code',
+    fields: ['description', 'hs_code'],
+    storeFields: ['hs_code', 'description', 'level', 'section', 'parent'],
+    searchOptions: {
+      prefix: true,
+      fuzzy: 0.2,
+      boost: { description: 2 },
+    },
+  })
+  index.addAll(getItemsForCategory(categoryCode))
+  itemSearchCache = { categoryCode, index }
+  return index
+}
+
+function searchItemsInCategory(categoryCode: string, query: string): HsTaxonomyEntry[] {
+  const trimmed = query.trim()
+  if (!trimmed) {
+    return getItemsForCategory(categoryCode)
+  }
+  return getItemSearchIndex(categoryCode).search(trimmed).map(toEntry)
+}
+
 export function useHsTaxonomy(): UseHsTaxonomyReturn {
-  return { entries, isLoading, error, search, load, getItemsForCategory }
+  return {
+    entries,
+    isLoading,
+    error,
+    search,
+    load,
+    getItemsForCategory,
+    searchItemsInCategory,
+  }
 }

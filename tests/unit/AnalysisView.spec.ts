@@ -97,14 +97,20 @@ describe('AnalysisView', () => {
     expect(wrapper.find('button').exists()).toBe(true) // retryable -> Retry offered
   })
 
-  it('shows a non-retryable error state (e.g. budget exhaustion) without offering a dead-end retry button', async () => {
+  it('shows a retryable error state for budget exhaustion, matching the real backend (retryable:true), plus explanatory copy instead of a bare Retry button', async () => {
+    // Regression test for Phase 4 finding M19/Frontend-QA#7: the real
+    // backend (app/nodes/describe_item.py, app/nodes/summarize.py) always
+    // constructs BUDGET_EXCEEDED with retryable=True — this suite used to
+    // hardcode retryable:false here, which is exactly the cross-repo
+    // contract drift the finding caught (every test passed while asserting
+    // the wrong thing against the real backend).
     mockedApiRequest.mockResolvedValueOnce({ thread_id: 't1' })
     mockedApiRequest.mockRejectedValueOnce(
       new ApiError({
         httpStatus: 429,
         errorCode: 'BUDGET_EXCEEDED',
         message: 'This service has reached its usage limit for now.',
-        retryable: false,
+        retryable: true,
         traceId: 'trace-budget',
       }),
     )
@@ -112,7 +118,12 @@ describe('AnalysisView', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('usage limit')
-    expect(wrapper.find('button').exists()).toBe(false)
+    // retryable:true -> ErrorState does render its Retry button (a bare
+    // "Retry" with zero context is itself the poor-UX half of this finding
+    // — see the explanatory copy assertion below).
+    expect(wrapper.find('button').exists()).toBe(true)
+    expect(wrapper.text()).toContain('shared across all users')
+    expect(wrapper.text()).toContain('tomorrow')
   })
 
   it('offers a "choose a different category" link specifically for an INVALID_HS_CODE error', async () => {

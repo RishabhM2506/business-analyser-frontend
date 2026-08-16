@@ -2,10 +2,11 @@ import { expect, test } from '@playwright/test'
 
 import {
   E2E_ANALYSIS_ENVELOPE,
-  E2E_BUDGET_EXCEEDED_ERROR,
+  E2E_BUDGET_EXCEEDED_ENVELOPE,
   E2E_CATEGORY_QUERY,
   E2E_ITEM_DESCRIPTION,
   E2E_THREAD_ID,
+  NAVIGATION_LOCKOUT_CLEAR_MS,
 } from './fixtures'
 
 /**
@@ -43,6 +44,11 @@ test.describe('full analysis flow', () => {
     await expect(page).toHaveURL(/\/categories\/01\/items$/)
     await expect(page.getByRole('heading', { name: 'Animals; live' })).toBeVisible()
 
+    // See fixtures.ts's NAVIGATION_LOCKOUT_CLEAR_MS doc comment (M18): a
+    // real user picking a category then an item is two separate, deliberate
+    // choices, not a double-click echo — wait past the lockout so this
+    // realistic sequential flow isn't mistaken for the bug it guards against.
+    await page.waitForTimeout(NAVIGATION_LOCKOUT_CLEAR_MS)
     const itemOption = page.getByRole('option', { name: new RegExp(E2E_ITEM_DESCRIPTION) })
     await expect(itemOption).toBeVisible()
     await itemOption.click()
@@ -70,24 +76,36 @@ test.describe('full analysis flow', () => {
     await expect(page.getByText(/fiscal year/)).toBeVisible()
   })
 
-  test('a budget-exhaustion error from the backend renders an actionable, non-retryable error state', async ({
+  test('a budget-exhaustion error from the backend renders an actionable error state with real (retryable) semantics, not a bare dead-end Retry', async ({
     page,
   }) => {
+    // Regression test for M19/Frontend-QA#7 and B1/ARCH-01 together: the
+    // fixture is both (a) enveloped exactly like the real backend wraps
+    // every POST /threads/{id}/messages response, success or error
+    // (docs/PLAN.md §3.3), and (b) retryable:true, matching the real
+    // backend's actual BUDGET_EXCEEDED construction — this spec used to
+    // assert the opposite of both.
     await mockThreadCreation(page)
     await page.route(`**/api/threads/${E2E_THREAD_ID}/messages`, async (route) => {
-      await route.fulfill({ status: 429, json: E2E_BUDGET_EXCEEDED_ERROR })
+      await route.fulfill({ status: 429, json: E2E_BUDGET_EXCEEDED_ENVELOPE })
     })
 
     await page.goto('/')
     await page.getByRole('button', { name: 'Start my process' }).click()
     await page.getByRole('combobox', { name: /search hs categories/i }).fill(E2E_CATEGORY_QUERY)
     await page.getByRole('option', { name: /Animals; live/i }).click()
+    await expect(page).toHaveURL(/\/categories\/01\/items$/)
+    await page.waitForTimeout(NAVIGATION_LOCKOUT_CLEAR_MS) // see M18 note above
     await page.getByRole('option', { name: new RegExp(E2E_ITEM_DESCRIPTION) }).click()
 
     const alert = page.getByRole('alert')
     await expect(alert).toContainText('usage limit')
-    // BUDGET_EXCEEDED is not retryable — no dead-end Retry button offered.
-    await expect(alert.getByRole('button', { name: 'Retry' })).toHaveCount(0)
+    // BUDGET_EXCEEDED is retryable:true on the real wire — the button IS
+    // offered, but bare "Retry" with no context is poor UX for a shared
+    // daily-limit error, so explanatory copy must accompany it.
+    await expect(alert.getByRole('button', { name: 'Retry' })).toHaveCount(1)
+    await expect(alert).toContainText('shared across all users')
+    await expect(alert).toContainText('tomorrow')
     // The user is never stuck: the persistent breadcrumb is still there.
     await expect(page.getByRole('link', { name: /back to categories/i })).toBeVisible()
   })

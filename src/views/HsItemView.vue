@@ -30,7 +30,7 @@ function onSelect(item: HsTaxonomyEntry): void {
     <p class="view__breadcrumb">
       <RouterLink :to="{ name: ROUTE_NAMES.HS_CATEGORY }">← Back to categories</RouterLink>
     </p>
-    <h1>{{ category ? category.description : `Category ${categoryCode}` }}</h1>
+    <h1 tabindex="-1">{{ category ? category.description : `Category ${categoryCode}` }}</h1>
     <p class="view__hint">Select an item to see its 5-year import/export analysis.</p>
     <ItemList :category-code="categoryCode" @select="onSelect" />
   </main>
@@ -52,7 +52,11 @@ function onSelect(item: HsTaxonomyEntry): void {
 }
 
 .view__breadcrumb a {
-  color: var(--color-primary);
+  /* --color-link, not --color-primary (Phase 4 finding M16/Frontend-QA#4) —
+   * see tokens.css's comment: this is a text-on-background use, which needs
+   * a lighter dark-mode value than --color-primary's background-under-
+   * white-text use can share. */
+  color: var(--color-link);
 }
 
 .view h1 {

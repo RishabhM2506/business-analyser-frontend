@@ -93,6 +93,52 @@ describe('useHsTaxonomy', () => {
     expect(entries.value).toEqual([])
   })
 
+  it('times out and sets a timeout-specific error if the taxonomy fetch hangs (M13)', async () => {
+    // Regression test for Phase 4 finding M13/Frontend-Reviewer#2: the
+    // taxonomy fetch previously had no timeout at all — a stalled connection
+    // on this 1.2MB file left `isLoading` true forever with no escape (the
+    // ErrorState/Retry path only appears once `error.value` is set, which a
+    // hang never triggers). Uses fake timers to simulate a hang without a
+    // real 15s wait; the mock `fetch` only ever settles when the
+    // AbortController's signal actually fires, matching real `fetch`
+    // behavior under an abort.
+    vi.useFakeTimers()
+    try {
+      const useHsTaxonomy = await freshUseHsTaxonomy()
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((_url: string, options?: { signal?: AbortSignal }) => {
+          return new Promise((_resolve, reject) => {
+            options?.signal?.addEventListener('abort', () => {
+              const abortError = new Error('The operation was aborted.')
+              abortError.name = 'AbortError'
+              reject(abortError)
+            })
+          })
+        }),
+      )
+      const { error, isLoading, load } = useHsTaxonomy()
+
+      const loadPromise = load()
+      expect(isLoading.value).toBe(true)
+      // Attach the rejection assertion *before* advancing timers so a
+      // handler exists the instant the promise actually settles — otherwise
+      // there's a brief window between the abort firing (inside
+      // advanceTimersByTimeAsync) and this test attaching `.rejects` that
+      // Node flags as an unhandled rejection, even though it is handled
+      // moments later.
+      const assertion = expect(loadPromise).rejects.toThrow(/timed out/i)
+
+      await vi.advanceTimersByTimeAsync(15_000)
+      await assertion
+
+      expect(error.value?.message).toMatch(/timed out/i)
+      expect(isLoading.value).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('allows retrying load() after a failure (does not permanently latch the failed promise)', async () => {
     const useHsTaxonomy = await freshUseHsTaxonomy()
     vi.stubGlobal(
@@ -235,6 +281,61 @@ describe('useHsTaxonomy', () => {
       await load()
 
       expect(getItemsForCategory('99')).toEqual([])
+    })
+  })
+
+  describe('searchItemsInCategory (M24/PBO-06)', () => {
+    it('returns every item in the category for an empty/whitespace query, same as getItemsForCategory', async () => {
+      const useHsTaxonomy = await freshUseHsTaxonomy()
+      mockFetchOnce(FIXTURE_TAXONOMY)
+      const { load, searchItemsInCategory } = useHsTaxonomy()
+      await load()
+
+      expect(searchItemsInCategory('01', '   ').map((e) => e.hs_code)).toEqual(['010121', '010129'])
+    })
+
+    it('filters to only items in the given category matching the query', async () => {
+      const useHsTaxonomy = await freshUseHsTaxonomy()
+      mockFetchOnce(FIXTURE_TAXONOMY)
+      const { load, searchItemsInCategory } = useHsTaxonomy()
+      await load()
+
+      // Only 010129 ("...other than pure-bred breeding animals") contains "other".
+      const results = searchItemsInCategory('01', 'other')
+      expect(results.map((e) => e.hs_code)).toEqual(['010129'])
+    })
+
+    it('never returns a match from a different category, even if it matches the query text', async () => {
+      const useHsTaxonomy = await freshUseHsTaxonomy()
+      mockFetchOnce(FIXTURE_TAXONOMY)
+      const { load, searchItemsInCategory } = useHsTaxonomy()
+      await load()
+
+      // "Sausages" (category 16) should never appear when searching category 01.
+      expect(searchItemsInCategory('01', 'sausages')).toEqual([])
+      expect(searchItemsInCategory('16', 'sausages').map((e) => e.hs_code)).toEqual(['160100'])
+    })
+
+    it('returns an empty array for a query matching nothing in that category', async () => {
+      const useHsTaxonomy = await freshUseHsTaxonomy()
+      mockFetchOnce(FIXTURE_TAXONOMY)
+      const { load, searchItemsInCategory } = useHsTaxonomy()
+      await load()
+
+      expect(searchItemsInCategory('01', 'zzz_no_such_item_zzz')).toEqual([])
+    })
+
+    it('re-indexes correctly when searching a different category than the last one searched (cache invalidation)', async () => {
+      const useHsTaxonomy = await freshUseHsTaxonomy()
+      mockFetchOnce(FIXTURE_TAXONOMY)
+      const { load, searchItemsInCategory } = useHsTaxonomy()
+      await load()
+
+      expect(searchItemsInCategory('01', 'other').map((e) => e.hs_code)).toEqual(['010129'])
+      // Switch to a different category, then back — must not serve a stale
+      // cached index from either prior call.
+      expect(searchItemsInCategory('16', 'sausages').map((e) => e.hs_code)).toEqual(['160100'])
+      expect(searchItemsInCategory('01', 'other').map((e) => e.hs_code)).toEqual(['010129'])
     })
   })
 })

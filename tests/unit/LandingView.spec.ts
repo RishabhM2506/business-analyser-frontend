@@ -48,6 +48,12 @@ describe('LandingView', () => {
     expect(wrapper.find('button').text()).toBe('Start my process')
   })
 
+  it("plainly states this is India's trade data (M22/PBO-04)", async () => {
+    // Previously nowhere in the app stated whose trade data this was.
+    const { wrapper } = await mountLanding()
+    expect(wrapper.text()).toContain("India's")
+  })
+
   it('clicking "Start my process" creates a thread (POST /threads) and navigates to the category picker', async () => {
     mockedApiRequest.mockResolvedValueOnce({ thread_id: 'thread-1' })
     const { wrapper, router } = await mountLanding()

@@ -4,7 +4,11 @@ import { describe, expect, it } from 'vitest'
 import TradeTable from '@/components/analysis/TradeTable.vue'
 import type { TradeTable as TradeTableType } from '@/types/generated'
 
-import { FIXTURE_EMPTY_TRADE_TABLE, FIXTURE_IMPORTS_TABLE } from '../fixtures/tradeAnalysisResponse'
+import {
+  FIXTURE_EMPTY_TRADE_TABLE,
+  FIXTURE_EXPORTS_TABLE,
+  FIXTURE_IMPORTS_TABLE,
+} from '../fixtures/tradeAnalysisResponse'
 
 describe('TradeTable', () => {
   it('renders one row per country and the title as a heading', () => {
@@ -74,6 +78,18 @@ describe('TradeTable', () => {
       props: { title: 'Imports', table: { ...FIXTURE_IMPORTS_TABLE, excluded_partner_codes: [] } },
     })
     expect(withoutExclusions.text()).not.toContain('excluded')
+  })
+
+  it('explains what "—" means whenever any cell is actually missing data (M23/PBO-05)', () => {
+    // FIXTURE_IMPORTS_TABLE has a real null cell (Germany, 2023).
+    const wrapper = mount(TradeTable, { props: { title: 'Imports', table: FIXTURE_IMPORTS_TABLE } })
+    expect(wrapper.text()).toContain('does not mean zero trade occurred')
+  })
+
+  it('does not show the missing-data footnote when every cell has a real reported value', () => {
+    // FIXTURE_EXPORTS_TABLE has no null cells.
+    const wrapper = mount(TradeTable, { props: { title: 'Exports', table: FIXTURE_EXPORTS_TABLE } })
+    expect(wrapper.text()).not.toContain('does not mean zero trade occurred')
   })
 
   it('shows the table unit', () => {
