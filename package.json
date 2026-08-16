@@ -22,15 +22,16 @@
   },
   "dependencies": {
     "axios": "^1.19.0",
+    "minisearch": "^7.2.0",
     "pinia": "^4.0.3",
     "vue": "^3.5.41",
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.2",
+    "@commitlint/config-conventional": "^21.2.2",
     "@eslint/compat": "^2.1.0",
     "@eslint/js": "^10.0.1",
-    "@commitlint/config-conventional": "^21.2.2",
     "@playwright/test": "^1.62.1",
     "@tsconfig/node22": "^22.0.6",
     "@types/node": "^26.2.0",

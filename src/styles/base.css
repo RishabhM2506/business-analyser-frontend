@@ -18,3 +18,22 @@ body {
 #app {
   min-height: 100vh;
 }
+
+/*
+ * Visually hides content while keeping it in the accessibility tree — for
+ * ARIA live-region status text (e.g. "12 categories available") that sighted
+ * users get for free from the visible results list, but screen-reader users
+ * need announced explicitly. Never `display: none`/`visibility: hidden`,
+ * which would remove it from the accessibility tree too.
+ */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
