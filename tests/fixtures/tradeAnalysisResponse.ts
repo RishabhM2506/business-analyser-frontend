@@ -106,6 +106,35 @@ export const FIXTURE_EMPTY_TRADE_TABLE: TradeTable = {
   rows: [],
 }
 
+// Finding M21/PBO-03: a real live shape (HS 851713, "smartphones" — a code
+// created only in the HS 2022 nomenclature revision) — 2021 has zero
+// records for every partner, distinct from 2025 which has records but
+// isn't finalized yet. Kept as its own fixture rather than mutating
+// FIXTURE_IMPORTS_TABLE above, since several existing tests assert that
+// fixture's exact shape.
+export const FIXTURE_IMPORTS_TABLE_WITH_NO_DATA_YEAR: TradeTable = {
+  unit: 'USD',
+  years: [2021, 2022, 2023, 2024, 2025],
+  years_finalized: [2022, 2023, 2024],
+  years_no_data: [2021], // this HS6 code didn't exist in the 2021 nomenclature
+  excluded_partner_codes: [],
+  rows: [
+    makeRow({
+      partner_country: 'United States',
+      partner_code: '842',
+      rank: 1,
+      values_by_year: {
+        '2021': null,
+        '2022': 520_000,
+        '2023': 480_000,
+        '2024': 510_000,
+        '2025': 495_000,
+      },
+      cumulative_5yr: 2_005_000,
+    }),
+  ],
+}
+
 export const FIXTURE_EMPTY_TRADE_ANALYSIS_RESPONSE: TradeAnalysisResponse = {
   ...FIXTURE_TRADE_ANALYSIS_RESPONSE,
   hs_code: '999999',
