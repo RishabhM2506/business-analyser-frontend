@@ -52,7 +52,11 @@ function onSelect(item: HsTaxonomyEntry): void {
 }
 
 .view__breadcrumb a {
-  color: var(--color-primary);
+  /* --color-link, not --color-primary (Phase 4 finding M16/Frontend-QA#4) —
+   * see tokens.css's comment: this is a text-on-background use, which needs
+   * a lighter dark-mode value than --color-primary's background-under-
+   * white-text use can share. */
+  color: var(--color-link);
 }
 
 .view h1 {

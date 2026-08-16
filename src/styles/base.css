@@ -20,6 +20,19 @@ body {
 }
 
 /*
+ * Phase 4 finding M16/Frontend-QA#4: without this, a link with no explicit
+ * class (e.g. ErrorState.vue/EmptyState.vue's default `<slot />`, consumed
+ * by AnalysisView.vue's "Choose a different category"/"Try a different
+ * category" RouterLinks with no class of their own) falls through to the
+ * bare browser default link blue (#0000ee), which measured 1.90:1 against
+ * this app's dark background — nowhere close to this app's design system in
+ * either theme, and a real WCAG AA failure in dark mode specifically.
+ */
+a {
+  color: var(--color-link);
+}
+
+/*
  * Visually hides content while keeping it in the accessibility tree — for
  * ARIA live-region status text (e.g. "12 categories available") that sighted
  * users get for free from the visible results list, but screen-reader users
