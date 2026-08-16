@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 
+import type { ResponseEnvelope } from '../../src/types/generated'
 import {
   E2E_ANALYSIS_ENVELOPE,
   E2E_CATEGORY_QUERY,
@@ -130,5 +131,55 @@ test.describe('virtualized picker rows stay a fixed height with real long descri
     const height = await option.evaluate((el) => el.getBoundingClientRect().height)
     // ITEM_HEIGHT for items is 56px.
     expect(height).toBeLessThanOrEqual(64)
+  })
+})
+
+/**
+ * Regression coverage for Phase 4 finding M15/Frontend-QA#3: a single long
+ * unbroken word in LLM-authored prose (analytical_summary/item_description
+ * — the two pieces of content this app generates from a model) overflowed
+ * `AnalysisSummary.vue`'s container and the whole page horizontally on a
+ * standard desktop viewport, since nothing constrained a run with zero word-
+ * break opportunities. Matches the source report's exact reproduction
+ * method: a 150+ char unbroken token on a 1280px viewport.
+ */
+test.describe('a long unbroken word in analysis prose does not overflow the page (M15)', () => {
+  test('analytical_summary containing a 204-char unbroken token does not widen the page horizontally', async ({
+    page,
+  }) => {
+    const LONG_TOKEN = 'a'.repeat(204)
+    // Narrow the union before spreading `.data` — ResponseEnvelope's other
+    // member types it `unknown`, which can't be spread.
+    if (E2E_ANALYSIS_ENVELOPE.type !== 'final') {
+      throw new Error('Expected E2E_ANALYSIS_ENVELOPE to be a "final" envelope.')
+    }
+    const envelopeWithLongToken: ResponseEnvelope = {
+      type: 'final',
+      data: {
+        ...E2E_ANALYSIS_ENVELOPE.data,
+        analytical_summary: `A single unbroken run follows: ${LONG_TOKEN} — the rest of the sentence continues normally.`,
+      },
+    }
+
+    await page.route('**/api/threads', async (route) => {
+      await route.fulfill({ json: { thread_id: E2E_THREAD_ID } })
+    })
+    await page.route(`**/api/threads/${E2E_THREAD_ID}/messages`, async (route) => {
+      await route.fulfill({ json: envelopeWithLongToken })
+    })
+
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Start my process' }).click()
+    await page.getByRole('combobox', { name: /search hs categories/i }).fill(E2E_CATEGORY_QUERY)
+    await page.getByRole('option', { name: /Animals; live/i }).click()
+    await page.getByRole('option', { name: new RegExp(E2E_ITEM_DESCRIPTION) }).click()
+    await expect(page.getByText(LONG_TOKEN)).toBeVisible()
+
+    const { scrollWidth, clientWidth } = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    }))
+    expect(scrollWidth).toBeLessThanOrEqual(clientWidth)
   })
 })
