@@ -1,5 +1,7 @@
 # Dependencies
-node_modules/
+# No trailing slash: matches node_modules whether it's a real directory or a
+# symlink (e.g. a local workaround pointing it outside a cloud-synced folder).
+node_modules
 
 # Build output
 dist/
