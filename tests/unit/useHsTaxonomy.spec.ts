@@ -93,6 +93,52 @@ describe('useHsTaxonomy', () => {
     expect(entries.value).toEqual([])
   })
 
+  it('times out and sets a timeout-specific error if the taxonomy fetch hangs (M13)', async () => {
+    // Regression test for Phase 4 finding M13/Frontend-Reviewer#2: the
+    // taxonomy fetch previously had no timeout at all — a stalled connection
+    // on this 1.2MB file left `isLoading` true forever with no escape (the
+    // ErrorState/Retry path only appears once `error.value` is set, which a
+    // hang never triggers). Uses fake timers to simulate a hang without a
+    // real 15s wait; the mock `fetch` only ever settles when the
+    // AbortController's signal actually fires, matching real `fetch`
+    // behavior under an abort.
+    vi.useFakeTimers()
+    try {
+      const useHsTaxonomy = await freshUseHsTaxonomy()
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((_url: string, options?: { signal?: AbortSignal }) => {
+          return new Promise((_resolve, reject) => {
+            options?.signal?.addEventListener('abort', () => {
+              const abortError = new Error('The operation was aborted.')
+              abortError.name = 'AbortError'
+              reject(abortError)
+            })
+          })
+        }),
+      )
+      const { error, isLoading, load } = useHsTaxonomy()
+
+      const loadPromise = load()
+      expect(isLoading.value).toBe(true)
+      // Attach the rejection assertion *before* advancing timers so a
+      // handler exists the instant the promise actually settles — otherwise
+      // there's a brief window between the abort firing (inside
+      // advanceTimersByTimeAsync) and this test attaching `.rejects` that
+      // Node flags as an unhandled rejection, even though it is handled
+      // moments later.
+      const assertion = expect(loadPromise).rejects.toThrow(/timed out/i)
+
+      await vi.advanceTimersByTimeAsync(15_000)
+      await assertion
+
+      expect(error.value?.message).toMatch(/timed out/i)
+      expect(isLoading.value).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('allows retrying load() after a failure (does not permanently latch the failed promise)', async () => {
     const useHsTaxonomy = await freshUseHsTaxonomy()
     vi.stubGlobal(

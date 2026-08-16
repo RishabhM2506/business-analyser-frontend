@@ -44,6 +44,27 @@ export interface UseHsTaxonomyReturn {
 const TAXONOMY_URL = `${import.meta.env.BASE_URL}hs-taxonomy.json`
 const CATEGORY_LEVEL = 2
 const ITEM_LEVEL = 6
+// Matches services/api.ts's REQUEST_TIMEOUT_MS discipline (Phase 4 finding
+// M13/Frontend-Reviewer#2) — this fetch previously had no timeout at all,
+// unlike every other network call in the app, so a stalled connection on
+// this 1.2MB file stranded the user on the very first screen with an
+// infinite spinner and no escape (ErrorState's Retry path only appears once
+// `error.value` is set, which a hang never triggered).
+const TAXONOMY_TIMEOUT_MS = 15_000
+
+/** Duck-typed rather than `instanceof DOMException`: matches this codebase's
+ * established pattern (see `services/api.ts`'s `isErrorResponseBody`) and
+ * avoids depending on `DOMException`'s exact prototype chain, which has
+ * historically varied across environments (browsers vs. Node vs. test
+ * runners). */
+function isAbortError(caught: unknown): boolean {
+  return (
+    typeof caught === 'object' &&
+    caught !== null &&
+    'name' in caught &&
+    caught.name === 'AbortError'
+  )
+}
 
 // Module-level singleton state: the taxonomy (~1.2MB, 6,939 rows) and its
 // search index are loaded and built once per page session, then shared by
@@ -82,8 +103,10 @@ function sortByCode(a: HsTaxonomyEntry, b: HsTaxonomyEntry): number {
 async function fetchTaxonomy(): Promise<void> {
   isLoading.value = true
   error.value = null
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), TAXONOMY_TIMEOUT_MS)
   try {
-    const response = await fetch(TAXONOMY_URL)
+    const response = await fetch(TAXONOMY_URL, { signal: controller.signal })
     if (!response.ok) {
       throw new Error(`Failed to load HS taxonomy data (HTTP ${response.status}).`)
     }
@@ -104,12 +127,17 @@ async function fetchTaxonomy(): Promise<void> {
     entries.value = data
     miniSearch.value = index
   } catch (caught) {
-    error.value = caught instanceof Error ? caught : new Error('Failed to load HS taxonomy data.')
+    error.value = isAbortError(caught)
+      ? new Error('Loading HS categories timed out. Please try again.')
+      : caught instanceof Error
+        ? caught
+        : new Error('Failed to load HS taxonomy data.')
     entries.value = []
     miniSearch.value = null
     throw error.value
   } finally {
     isLoading.value = false
+    clearTimeout(timeoutId)
   }
 }
 
