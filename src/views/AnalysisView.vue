@@ -56,6 +56,18 @@ const isEmpty = computed(() => {
       :retryable="error.retryable"
       @retry="runQuery"
     >
+      <!-- BUDGET_EXCEEDED is retryable on the wire (Phase 4 finding
+           M19/Frontend-QA#7 — confirmed against the real backend, which
+           enforces both a per-thread/session ceiling and a shared per-day
+           ceiling under the same error_code with no way for the frontend to
+           tell which was hit), but a bare "Retry" button with no context is
+           poor UX when the common real cause is a shared daily limit that
+           cannot resolve until the next UTC day. Say so plainly instead of
+           implying every retry is equally likely to help. -->
+      <p v-if="error.isBudgetExceeded" class="view__error-note">
+        This limit is shared across all users. Retry may work right away if it was a short-lived
+        limit — but if the shared daily limit was reached, it won't reset until tomorrow (UTC).
+      </p>
       <RouterLink
         v-if="error.errorCode === 'INVALID_HS_CODE'"
         :to="{ name: ROUTE_NAMES.HS_CATEGORY }"
@@ -113,5 +125,10 @@ const isEmpty = computed(() => {
 .view__title {
   font-size: var(--font-size-xl);
   margin: 0;
+}
+
+.view__error-note {
+  margin: 0;
+  font-size: var(--font-size-sm);
 }
 </style>

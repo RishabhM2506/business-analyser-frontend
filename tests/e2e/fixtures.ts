@@ -90,9 +90,28 @@ export const E2E_ANALYSIS_ENVELOPE: ResponseEnvelope = {
   },
 }
 
-export const E2E_BUDGET_EXCEEDED_ERROR: ErrorResponse = {
+// The real backend wraps *every* POST /threads/{id}/messages response body —
+// success or error alike — in the same {type: 'final', data: ...} envelope
+// (docs/PLAN.md §3.3, Phase 4 finding ARCH-01/B1's concrete fix). Before this
+// fix, this fixture was a bare, un-enveloped ErrorResponse — a shape the real
+// backend never actually sends for this endpoint, which is exactly the class
+// of drift ARCH-01 flags ("nothing ever tested it against the real backend
+// contract"). Wrapping it here means this e2e spec would fail to catch a
+// real BUDGET_EXCEEDED response the same way api.ts's own unwrapping logic
+// now handles it, instead of silently passing against a shape that only
+// superficially resembles the real one.
+const E2E_BUDGET_EXCEEDED_ERROR_RESPONSE: ErrorResponse = {
   error_code: 'BUDGET_EXCEEDED',
   message: 'This service has reached its usage limit for now. Please try again later.',
-  retryable: false,
+  // Real backend value, confirmed against app/nodes/describe_item.py and
+  // app/nodes/summarize.py (Phase 4 finding M19/Frontend-QA#7) — BUDGET_EXCEEDED
+  // is retryable:true on the wire, even though a retry against the shared
+  // per-day ceiling frequently can't succeed until the next UTC day.
+  retryable: true,
   trace_id: 'e2e-trace-budget',
+}
+
+export const E2E_BUDGET_EXCEEDED_ENVELOPE: ResponseEnvelope = {
+  type: 'final',
+  data: E2E_BUDGET_EXCEEDED_ERROR_RESPONSE,
 }

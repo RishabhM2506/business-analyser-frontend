@@ -79,11 +79,14 @@ describe('useThread', () => {
     const { createThread, sendMessage, isLoading } = useThread()
     await createThread()
 
+    // retryable:true matches the real backend (app/nodes/describe_item.py,
+    // app/nodes/summarize.py both construct BUDGET_EXCEEDED with
+    // retryable=True) — Phase 4 finding M19/Frontend-QA#7.
     const budgetError = new ApiError({
       httpStatus: 429,
       errorCode: 'BUDGET_EXCEEDED',
       message: 'Daily budget exhausted.',
-      retryable: false,
+      retryable: true,
       traceId: 'trace-1',
     })
     mockedApiRequest.mockRejectedValueOnce(budgetError)

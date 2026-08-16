@@ -11,10 +11,11 @@
  * whatever HTTP status the backend used to send it. This still protects
  * against the same failure mode the reference repo guarded against (a 200
  * that is actually an error), without inventing a `status` field this
- * backend's schema doesn't have.
- *
- * No endpoint exists to call successfully yet — the backend doesn't expose
- * `/threads` until Phase 3. This file is infrastructure, wired for real.
+ * backend's schema doesn't have. `POST /threads/{id}/messages` additionally
+ * wraps its body in a `{type, data}` envelope (docs/PLAN.md §3.3) — see
+ * `unwrapEnvelope` below, which the error-detection path unwraps through
+ * before checking for `error_code`, so an enveloped `ErrorResponse` is still
+ * recognized correctly (Phase 4 finding ARCH-01/B1).
  */
 import axios, {
   type AxiosError,
@@ -22,7 +23,7 @@ import axios, {
   type InternalAxiosRequestConfig,
 } from 'axios'
 
-import type { ErrorResponse } from '@/types/generated'
+import type { ErrorResponse, ResponseEnvelope } from '@/types/generated'
 
 const REQUEST_TIMEOUT_MS = 15_000
 const GENERIC_ERROR_MESSAGE = 'Something went wrong. Please try again.'
@@ -83,6 +84,28 @@ function isErrorResponseBody(data: unknown): data is ErrorResponse {
   )
 }
 
+/** Type guard for the `{type, data}` wire envelope (docs/PLAN.md §3.3, ARCH-01). */
+function isResponseEnvelope(data: unknown): data is ResponseEnvelope {
+  return typeof data === 'object' && data !== null && 'type' in data && 'data' in data
+}
+
+/**
+ * `POST /threads/{id}/messages` wraps *every* response — success or error —
+ * in a `{type: 'final', data: ...}` envelope (docs/PLAN.md §3.3; backend
+ * fix landing alongside this one, ARCH-01). Other endpoints (e.g.
+ * `POST /threads`) are not enveloped. Error detection below must unwrap
+ * defensively so a genuine `ErrorResponse` nested at `body.data` is still
+ * recognized — without this, `isErrorResponseBody` only ever sees the outer
+ * `{type, data}` shape (no top-level `error_code`), silently misses every
+ * enveloped error, and falls back to a lossy generic `UNKNOWN_ERROR` that
+ * discards the backend's real error_code/message/retryable/trace_id. A body
+ * that isn't enveloped passes through unchanged, so this stays correct for
+ * `POST /threads`'s bare (non-enveloped) responses too.
+ */
+function unwrapEnvelope(data: unknown): unknown {
+  return isResponseEnvelope(data) ? data.data : data
+}
+
 function fromErrorResponseBody(body: ErrorResponse, httpStatus: number | null): ApiError {
   return new ApiError({
     httpStatus,
@@ -107,7 +130,7 @@ function fromAxiosError(error: AxiosError): ApiError {
     })
   }
 
-  const body: unknown = response.data
+  const body = unwrapEnvelope(response.data)
   if (isErrorResponseBody(body)) {
     return fromErrorResponseBody(body, response.status)
   }
@@ -153,9 +176,12 @@ http.interceptors.response.use(
   (response) => {
     // A backend node can fail after already committing to a 2xx (e.g. output
     // guardrail rejection assembled late) — the body's error_code decides
-    // failure, not the status code alone. See file header.
-    if (isErrorResponseBody(response.data)) {
-      return Promise.reject(fromErrorResponseBody(response.data, response.status))
+    // failure, not the status code alone. See file header. Unwrap first
+    // since POST /threads/{id}/messages wraps this in a {type, data}
+    // envelope (docs/PLAN.md §3.3) — see unwrapEnvelope's own comment.
+    const payload = unwrapEnvelope(response.data)
+    if (isErrorResponseBody(payload)) {
+      return Promise.reject(fromErrorResponseBody(payload, response.status))
     }
     return response
   },
