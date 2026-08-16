@@ -1,0 +1,116 @@
+import { expect, test } from '@playwright/test'
+
+import {
+  E2E_ANALYSIS_ENVELOPE,
+  E2E_BUDGET_EXCEEDED_ERROR,
+  E2E_CATEGORY_QUERY,
+  E2E_ITEM_DESCRIPTION,
+  E2E_THREAD_ID,
+} from './fixtures'
+
+/**
+ * End-to-end walk of the entire v1 user journey (master brief §2.1): Start →
+ * HS category search → item select → analysis rendered as a chat result.
+ * Exercises the real, bundled public/hs-taxonomy.json (a real category and
+ * item from that file — see fixtures.ts) end to end; only the backend HTTP
+ * calls are mocked, since the backend isn't reachable while building this
+ * slice. A separate docker-compose-based pass verifies the real backend
+ * contract later.
+ */
+async function mockThreadCreation(page: import('@playwright/test').Page) {
+  await page.route('**/api/threads', async (route) => {
+    await route.fulfill({ json: { thread_id: E2E_THREAD_ID } })
+  })
+}
+
+test.describe('full analysis flow', () => {
+  test('search a category, pick an item, and see the rendered analysis', async ({ page }) => {
+    await mockThreadCreation(page)
+    await page.route(`**/api/threads/${E2E_THREAD_ID}/messages`, async (route) => {
+      await route.fulfill({ json: E2E_ANALYSIS_ENVELOPE })
+    })
+
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Start my process' }).click()
+    await expect(page).toHaveURL(/\/categories$/)
+
+    const searchInput = page.getByRole('combobox', { name: /search hs categories/i })
+    await searchInput.fill(E2E_CATEGORY_QUERY)
+    const categoryOption = page.getByRole('option', { name: /Animals; live/i })
+    await expect(categoryOption).toBeVisible()
+    await categoryOption.click()
+
+    await expect(page).toHaveURL(/\/categories\/01\/items$/)
+    await expect(page.getByRole('heading', { name: 'Animals; live' })).toBeVisible()
+
+    const itemOption = page.getByRole('option', { name: new RegExp(E2E_ITEM_DESCRIPTION) })
+    await expect(itemOption).toBeVisible()
+    await itemOption.click()
+
+    await expect(page).toHaveURL(/\/analysis\/010121$/)
+
+    // Item description and analytical summary — plain structured text.
+    await expect(page.getByText('What this item is')).toBeVisible()
+    await expect(page.getByText(/Live, pure-bred breeding horses/)).toBeVisible()
+    await expect(page.getByText(/Imports were led by the United States/)).toBeVisible()
+
+    // Both trade tables, with real formatted figures straight from the fixture.
+    await expect(page.getByRole('heading', { name: 'Imports' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Exports' })).toBeVisible()
+    await expect(page.getByText('$2,025,000.00')).toBeVisible() // US cumulative_5yr, imports
+
+    // Missing data (2023 for the US row) must render as the dash marker, never blank.
+    const importsTable = page.locator('table').filter({ hasText: 'United States' })
+    const usRow = importsTable.locator('tr').filter({ hasText: 'United States' })
+    await expect(usRow.getByText('—', { exact: true })).toBeVisible()
+
+    // Provenance: source, currency, and the explicit calendar-year-vs-fiscal-year note.
+    await expect(page.getByText('UN Comtrade (comtradeapi.un.org)')).toBeVisible()
+    await expect(page.getByText(/Calendar year/)).toBeVisible()
+    await expect(page.getByText(/fiscal year/)).toBeVisible()
+  })
+
+  test('a budget-exhaustion error from the backend renders an actionable, non-retryable error state', async ({
+    page,
+  }) => {
+    await mockThreadCreation(page)
+    await page.route(`**/api/threads/${E2E_THREAD_ID}/messages`, async (route) => {
+      await route.fulfill({ status: 429, json: E2E_BUDGET_EXCEEDED_ERROR })
+    })
+
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Start my process' }).click()
+    await page.getByRole('combobox', { name: /search hs categories/i }).fill(E2E_CATEGORY_QUERY)
+    await page.getByRole('option', { name: /Animals; live/i }).click()
+    await page.getByRole('option', { name: new RegExp(E2E_ITEM_DESCRIPTION) }).click()
+
+    const alert = page.getByRole('alert')
+    await expect(alert).toContainText('usage limit')
+    // BUDGET_EXCEEDED is not retryable — no dead-end Retry button offered.
+    await expect(alert.getByRole('button', { name: 'Retry' })).toHaveCount(0)
+    // The user is never stuck: the persistent breadcrumb is still there.
+    await expect(page.getByRole('link', { name: /back to categories/i })).toBeVisible()
+  })
+
+  test('keyboard-only category search: type, arrow down, Enter selects without a mouse', async ({
+    page,
+  }) => {
+    await mockThreadCreation(page)
+    await page.route(`**/api/threads/${E2E_THREAD_ID}/messages`, async (route) => {
+      await route.fulfill({ json: E2E_ANALYSIS_ENVELOPE })
+    })
+
+    await page.goto('/categories')
+    const searchInput = page.getByRole('combobox', { name: /search hs categories/i })
+    await searchInput.fill(E2E_CATEGORY_QUERY)
+    // Wait for the actual precondition (the taxonomy fetch + index build has
+    // finished and produced a visible result) rather than assuming fill()
+    // implies readiness — a real user can't press ArrowDown before seeing
+    // the dropdown populate, but automation can outrun the async load.
+    await expect(page.getByRole('option', { name: /Animals; live/i })).toBeVisible()
+    await searchInput.press('ArrowDown')
+    await searchInput.press('Enter')
+
+    await expect(page).toHaveURL(/\/categories\/01\/items$/)
+  })
+})

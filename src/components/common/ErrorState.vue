@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import AppButton from './AppButton.vue'
 
-withDefaults(defineProps<{ message?: string }>(), {
+withDefaults(defineProps<{ message?: string; retryable?: boolean }>(), {
   message: 'Something went wrong.',
+  // Most callers show a transient/network-ish failure where retrying makes
+  // sense; callers backed by a structured error (ApiError.retryable, mirroring
+  // the backend's own ErrorResponse.retryable — docs/PLAN.md §3.2) should
+  // pass that value through explicitly instead of relying on this default.
+  retryable: true,
 })
 
 defineEmits<{ retry: [] }>()
@@ -11,7 +16,8 @@ defineEmits<{ retry: [] }>()
 <template>
   <div class="state state--error" role="alert">
     <p>{{ message }}</p>
-    <AppButton variant="secondary" @click="$emit('retry')">Retry</AppButton>
+    <AppButton v-if="retryable" variant="secondary" @click="$emit('retry')">Retry</AppButton>
+    <slot />
   </div>
 </template>
 

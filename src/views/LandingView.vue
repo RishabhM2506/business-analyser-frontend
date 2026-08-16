@@ -1,15 +1,24 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 
 import AppButton from '@/components/common/AppButton.vue'
+import ErrorState from '@/components/common/ErrorState.vue'
 import { ROUTE_NAMES } from '@/constants/routes'
+import { useThreadStore } from '@/stores/thread'
 
 const router = useRouter()
+const threadStore = useThreadStore()
+const { loading, error } = storeToRefs(threadStore)
 
-// TODO(Phase 3): also call useThreadStore().startThread() here (POST /threads)
-// before navigating, so a thread exists before the user picks a category.
-function startProcess(): void {
-  router.push({ name: ROUTE_NAMES.HS_CATEGORY })
+// POST /threads (docs/PLAN.md §3.3) happens here, once, before the user ever
+// sees the category picker — a thread must exist before any item selection
+// can POST /threads/{id}/messages.
+async function startProcess(): Promise<void> {
+  await threadStore.startThread()
+  if (!threadStore.error) {
+    void router.push({ name: ROUTE_NAMES.HS_CATEGORY })
+  }
 }
 </script>
 
@@ -20,7 +29,15 @@ function startProcess(): void {
       Pick an HS trade-code category, then an item, and get a grounded 5-year import/export analysis
       for its top trading partners.
     </p>
-    <AppButton @click="startProcess">Start my process</AppButton>
+    <ErrorState
+      v-if="error"
+      :message="error.message"
+      :retryable="error.retryable"
+      @retry="startProcess"
+    />
+    <AppButton v-else :disabled="loading" @click="startProcess">
+      {{ loading ? 'Starting…' : 'Start my process' }}
+    </AppButton>
   </main>
 </template>
 
