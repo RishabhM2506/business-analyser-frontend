@@ -31,6 +31,14 @@ const retrievedAtDisplay = computed(() => {
 
 <template>
   <footer class="provenance">
+    <!-- Phase 4 finding M22/PBO-04: the only in-app statement of *whose*
+         trade data this is — `reporter_country` is optional on the wire
+         until the backend fix (parallel PR) lands, so this degrades to
+         simply not rendering the line rather than crashing or showing
+         "undefined." -->
+    <p v-if="provenance.reporter_country" class="provenance__line">
+      Reporting country: {{ provenance.reporter_country }}.
+    </p>
     <p class="provenance__line">
       Source: {{ provenance.source }} · Currency: {{ provenance.currency }} · Retrieved
       <time :datetime="provenance.retrieved_at">{{ retrievedAtDisplay }}</time>

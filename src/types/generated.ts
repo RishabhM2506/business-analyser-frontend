@@ -39,6 +39,16 @@ export interface Provenance {
   period_type: 'calendar_year'
   currency: 'USD'
   prompt_version: string
+  /**
+   * Phase 4 finding M22/PBO-04: the product never stated anywhere that this
+   * is India's trade data. Backend fix (parallel PR, not yet merged as of
+   * this change — confirmed against business-analyser-agentic-workflow's
+   * `app/schemas/response.py`) adds this field to `Provenance`. Optional
+   * here specifically so this frontend keeps working (rendering gracefully
+   * degrades, not crashes) against the real backend for however long the
+   * two PRs are merged out of sync — see ProvenanceFootnote.vue's `v-if`.
+   */
+  reporter_country?: 'India'
 }
 
 /** Mirrors `CountryRow` (Pydantic). */

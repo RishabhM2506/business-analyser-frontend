@@ -7,6 +7,13 @@
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.playwright.tsbuildinfo",
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "types": ["node"]
+    "types": ["node"],
+    // Node22's base lib (es2024 + the ESNext.* additions) has no DOM types,
+    // but `page.evaluate(() => ...)` callbacks are serialized and run
+    // *inside the browser* even though they're written in this Node-executed
+    // test file — they legitimately reference `document`/`window`. Extends
+    // the base list with `dom`/`dom.iterable` rather than replacing it,
+    // since TS `lib` doesn't merge across `extends`.
+    "lib": ["es2024", "dom", "dom.iterable", "ESNext.Array", "ESNext.Collection", "ESNext.Iterator"]
   }
 }

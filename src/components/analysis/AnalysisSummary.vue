@@ -52,5 +52,12 @@ const summaryParagraphs = computed(() => splitParagraphs(props.analyticalSummary
 .analysis-summary__block p {
   margin: 0;
   line-height: var(--line-height-base);
+  /* A single long unbroken run (Phase 4 finding M15/Frontend-QA#3 — e.g. a
+   * URL, identifier, or long compound name in model-authored prose) would
+   * otherwise overflow this container and the whole page horizontally. This
+   * is the correct CSS property for "break a single too-long word instead of
+   * overflowing," per the reproduction: a 150+ char unbroken token measured
+   * a genuine 344px page-level overflow on a 1280px viewport without it. */
+  overflow-wrap: break-word;
 }
 </style>

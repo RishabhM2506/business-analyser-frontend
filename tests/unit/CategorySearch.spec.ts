@@ -127,6 +127,43 @@ describe('CategorySearch', () => {
     expect(wrapper.find('[role="listbox"]').exists()).toBe(false)
   })
 
+  it('keeps a real long description fully intact in the DOM (M12: CSS-only truncation, never a lossy string truncation)', async () => {
+    // Regression test for Phase 4 finding M12/Frontend-Reviewer#1 — see
+    // ItemList.spec.ts's identical-in-spirit test for the full rationale.
+    // This exact 233-char description is a real row from the checked-in
+    // public/hs-taxonomy.json (hs_code 34) — the longest level-2 (category)
+    // description in the real dataset.
+    const LONG_DESCRIPTION =
+      'Soap, organic surface-active agents; washing, lubricating, polishing or scouring preparations; artificial or prepared waxes, candles and similar articles, modelling pastes, dental waxes and dental preparations with a basis of plaster'
+    expect(LONG_DESCRIPTION.length).toBeGreaterThan(200)
+    vi.resetModules()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => [
+          {
+            hs_code: '34',
+            description: LONG_DESCRIPTION,
+            level: 2,
+            section: 'VI',
+            parent: 'TOTAL',
+          },
+        ],
+      }),
+    )
+    const { default: FreshCategorySearch } =
+      await import('@/components/hs-picker/CategorySearch.vue')
+    const wrapper = mount(FreshCategorySearch)
+    await flushPromises()
+    await wrapper.find('input').trigger('focus')
+
+    const desc = wrapper.find('.category-search__desc')
+    expect(desc.text()).toBe(LONG_DESCRIPTION)
+    expect(desc.attributes('title')).toBe(LONG_DESCRIPTION)
+  })
+
   it('renders a category description containing markup as inert escaped text, never as executed HTML', async () => {
     // Needs genuinely fresh module state: useHsTaxonomy's singleton would
     // otherwise still be holding the fixture loaded by an earlier test in

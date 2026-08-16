@@ -12,6 +12,7 @@ import { isListNavigationKey, nextActiveIndex } from '@/components/common/listNa
 import LoadingState from '@/components/common/LoadingState.vue'
 import VirtualList from '@/components/common/VirtualList.vue'
 import { useHsTaxonomy, type HsTaxonomyEntry } from '@/composables/useHsTaxonomy'
+import { isNavigationBlocked, markNavigating } from '@/router'
 
 const ITEM_HEIGHT = 48
 const MAX_LIST_HEIGHT = 320
@@ -71,7 +72,19 @@ function closeList(): void {
   activeIndex.value = -1
 }
 
-function selectEntry(entry: HsTaxonomyEntry): void {
+/**
+ * `pointerEvent` is present only for a real mouse/touch click (omitted for
+ * keyboard Enter/Space, which have no analogous coordinate-based hazard —
+ * see router/index.ts's isNavigationBlocked/markNavigating doc comment for
+ * the full M18/Frontend-QA#6 rationale).
+ */
+function selectEntry(entry: HsTaxonomyEntry, pointerEvent?: MouseEvent): void {
+  if (pointerEvent && isNavigationBlocked(pointerEvent.clientX, pointerEvent.clientY)) {
+    return
+  }
+  if (pointerEvent) {
+    markNavigating(pointerEvent.clientX, pointerEvent.clientY)
+  }
   query.value = entry.description
   closeList()
   emit('select', entry)
@@ -153,14 +166,16 @@ function onKeydown(event: KeyboardEvent): void {
             class="category-search__option"
             :class="{ 'category-search__option--active': index === activeIndex }"
             @mousedown.prevent
-            @click="selectEntry(item)"
+            @click="(event) => selectEntry(item, event)"
             @keydown.enter.prevent="selectEntry(item)"
             @keydown.space.prevent="selectEntry(item)"
             @mouseenter="activeIndex = index"
             @focusin="activeIndex = index"
           >
             <span class="category-search__code">{{ item.hs_code }}</span>
-            <span class="category-search__desc">{{ item.description }}</span>
+            <span class="category-search__desc" :title="item.description">{{
+              item.description
+            }}</span>
           </li>
         </template>
       </VirtualList>
@@ -234,5 +249,19 @@ function onKeydown(event: KeyboardEvent): void {
 
 .category-search__desc {
   flex: 1;
+  /* VirtualList's offset math assumes every row is exactly ITEM_HEIGHT tall
+   * (Phase 4 finding M12/Frontend-Reviewer#1) — nothing enforced that before
+   * this rule, and real taxonomy descriptions run up to 233 chars at this
+   * level (verified against the real checked-in public/hs-taxonomy.json, not
+   * the short test fixtures), which wrap to 2-4 lines and break the
+   * virtualizer's spacer-height/scroll-offset calculations. `min-width: 0` is
+   * required alongside `flex: 1` for `text-overflow: ellipsis` to take effect
+   * at all inside a flex row (otherwise the item refuses to shrink below its
+   * content's intrinsic width and the ellipsis never triggers).
+   */
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 </style>

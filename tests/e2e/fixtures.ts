@@ -16,6 +16,22 @@ export const E2E_ITEM_DESCRIPTION = 'Horses; live, pure-bred breeding animals'
 
 export const E2E_THREAD_ID = 'e2e-thread-1'
 
+/**
+ * Phase 4 finding M18/Frontend-QA#6: `router/index.ts`'s navigation lockout
+ * blocks a second mouse-driven selection landing within ~40px of a previous
+ * one for `NAVIGATION_LOCKOUT_MS` (400ms) — this is what stops the reported
+ * fast-double-click bug (see that file's doc comment for the full
+ * rationale, including why position alone isn't enough: the category and
+ * item rows can land only a few px apart in this app's real layout). A
+ * scripted `.click()` immediately followed by another `.click()` with zero
+ * delay is not a realistic stand-in for a human's two *separate, deliberate*
+ * selections (choosing a category, then choosing an item on the next
+ * screen) — real specs exercising that normal sequential flow should wait
+ * at least this long between the two clicks so they aren't misread as the
+ * same double-click echo the lockout exists to catch.
+ */
+export const NAVIGATION_LOCKOUT_CLEAR_MS = 450
+
 export const E2E_ANALYSIS_ENVELOPE: ResponseEnvelope = {
   type: 'final',
   data: {
@@ -90,9 +106,37 @@ export const E2E_ANALYSIS_ENVELOPE: ResponseEnvelope = {
   },
 }
 
-export const E2E_BUDGET_EXCEEDED_ERROR: ErrorResponse = {
+// The real backend wraps *every* POST /threads/{id}/messages response body —
+// success or error alike — in the same {type: 'final', data: ...} envelope
+// (docs/PLAN.md §3.3, Phase 4 finding ARCH-01/B1's concrete fix). Before this
+// fix, this fixture was a bare, un-enveloped ErrorResponse — a shape the real
+// backend never actually sends for this endpoint, which is exactly the class
+// of drift ARCH-01 flags ("nothing ever tested it against the real backend
+// contract"). Wrapping it here means this e2e spec would fail to catch a
+// real BUDGET_EXCEEDED response the same way api.ts's own unwrapping logic
+// now handles it, instead of silently passing against a shape that only
+// superficially resembles the real one.
+const E2E_BUDGET_EXCEEDED_ERROR_RESPONSE: ErrorResponse = {
   error_code: 'BUDGET_EXCEEDED',
   message: 'This service has reached its usage limit for now. Please try again later.',
-  retryable: false,
+  // Real backend value, confirmed against app/nodes/describe_item.py and
+  // app/nodes/summarize.py (Phase 4 finding M19/Frontend-QA#7) — BUDGET_EXCEEDED
+  // is retryable:true on the wire, even though a retry against the shared
+  // per-day ceiling frequently can't succeed until the next UTC day.
+  retryable: true,
   trace_id: 'e2e-trace-budget',
+}
+
+// Deliberately not typed `ResponseEnvelope`: that type's 'final' variant is
+// `data: TradeAnalysisResponse` (the shape `useStreamingResponse.ts`'s
+// success path expects — the real backend always sends an error via a
+// non-2xx status, which `services/api.ts`'s interceptor intercepts and
+// converts to a rejected ApiError before this shape would ever reach that
+// code, per app/main.py's `_ERROR_STATUS_CODES`). This fixture instead
+// stands in for the raw, unshaped wire body Playwright's route mock hands
+// back — exactly what a real `{status: 429, body: ...}` response looks like
+// before any TypeScript type applies to it.
+export const E2E_BUDGET_EXCEEDED_ENVELOPE: { type: 'final'; data: ErrorResponse } = {
+  type: 'final',
+  data: E2E_BUDGET_EXCEEDED_ERROR_RESPONSE,
 }
