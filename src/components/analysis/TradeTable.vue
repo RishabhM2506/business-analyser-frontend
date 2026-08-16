@@ -27,6 +27,16 @@ const provisionalYears = computed(() =>
 function isFinalized(year: number): boolean {
   return props.table.years_finalized.includes(year)
 }
+
+// Phase 4 finding M23/PBO-05: the "—" marker is mechanically correct (a
+// reported zero and a true gap are never conflated — see tradeValueFormat.ts)
+// but had no on-screen explanation anywhere, unlike the provisional-years
+// footnote right above this one. A reader's natural, unguided reading of a
+// dash in a numbers table is "zero," which is exactly the misreading the
+// master brief says must never happen.
+const hasMissingData = computed(() =>
+  props.table.rows.some((row) => Object.values(row.values_by_year).some((value) => value === null)),
+)
 </script>
 
 <template>
@@ -82,6 +92,10 @@ function isFinalized(year: number): boolean {
       <p class="trade-table__footnote">Values in {{ table.unit }}.</p>
       <p v-if="provisionalYears.length > 0" class="trade-table__footnote">
         * Provisional — not yet finalized by the data source: {{ provisionalYears.join(', ') }}.
+      </p>
+      <p v-if="hasMissingData" class="trade-table__footnote">
+        "—" means no figure was reported for that country and year — it does not mean zero trade
+        occurred.
       </p>
       <p v-if="table.excluded_partner_codes.length > 0" class="trade-table__footnote">
         Aggregate/unspecified partner codes excluded before ranking:

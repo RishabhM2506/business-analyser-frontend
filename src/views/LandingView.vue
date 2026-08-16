@@ -26,8 +26,8 @@ async function startProcess(): Promise<void> {
   <main class="landing">
     <h1 tabindex="-1">Business Analyser</h1>
     <p>
-      Pick an HS trade-code category, then an item, and get a grounded 5-year import/export analysis
-      for its top trading partners.
+      Pick an HS trade-code category, then an item, and get a grounded 5-year analysis of
+      <strong>India's</strong> imports and exports for its top trading partners.
     </p>
     <ErrorState
       v-if="error"
