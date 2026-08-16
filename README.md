@@ -5,8 +5,10 @@ Vue 3 + TypeScript + Vite frontend for the **Business Analyser**: a user picks a
 import/export table for that item's top trading partners, with an LLM-written description and
 summary — never LLM-written numbers.
 
-This repo is currently a **scaffold**: real tooling and project structure, no business logic yet.
-See [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) for what conventions this repo follows and why.
+The full v1 user journey is implemented: HS category search → item picker → chat-style analysis
+result (item description, imports/exports tables, analytical summary, provenance), all
+client-side-testable against mocks/fixtures without a live backend. See
+[`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) for the conventions this repo follows and why.
 
 Architecture, data contracts, and the full v1 plan live in the sibling
 [`BusinessAnalysingAgent/docs/PLAN.md`](../BusinessAnalysingAgent/docs/PLAN.md) (not part of this
@@ -17,6 +19,7 @@ repo — see that repo's root for the master brief and planning docs). The backe
 
 - [Vue 3](https://vuejs.org/) (Composition API, `<script setup>` only) + [TypeScript](https://www.typescriptlang.org/) (strict) + [Vite](https://vite.dev/)
 - [Pinia](https://pinia.vuejs.org/) for state, [Vue Router](https://router.vuejs.org/) (named routes only)
+- [MiniSearch](https://lucaong.github.io/minisearch/) for the client-side HS category search index (zero backend/model calls)
 - [ESLint](https://eslint.org/) flat config + [Prettier](https://prettier.io/) + [vue-tsc](https://github.com/vuejs/language-tools) type checking + [eslint-plugin-vuejs-accessibility](https://vue-a11y.github.io/eslint-plugin-vuejs-accessibility/)
 - [Vitest](https://vitest.dev/) + [@vue/test-utils](https://test-utils.vuejs.org/) for component tests, [Playwright](https://playwright.dev/) for e2e
 - [husky](https://typicode.github.io/husky/) + [lint-staged](https://github.com/lint-staged/lint-staged) pre-commit, [commitlint](https://commitlint.js.org/) enforcing [Conventional Commits](https://www.conventionalcommits.org/)
@@ -32,9 +35,10 @@ npm run dev
 ```
 
 The dev server proxies same-origin `/api/*` requests to `http://localhost:8000` (see
-`vite.config.ts`) — start the backend separately (its own README) to exercise real API calls once
-it exposes endpoints. Until then, `src/services/api.ts` has no live endpoint to call successfully
-— that's expected at this stage.
+`vite.config.ts`) — start the backend separately (its own README) to exercise real API calls
+end-to-end. Without a running backend, "Start my process" and item selection will show the app's
+network-error state rather than a result — that's expected; all unit/component/e2e tests in this
+repo run against mocks/fixtures instead of a live backend (see Testing below).
 
 ## Available scripts
 
@@ -54,10 +58,17 @@ it exposes endpoints. Until then, `src/services/api.ts` has no live endpoint to 
 
 ## Testing
 
-- **Unit/component**: `npm run test:unit` (Vitest + `@vue/test-utils`). See `tests/unit/`.
+- **Unit/component**: `npm run test:unit` (Vitest + `@vue/test-utils`). See `tests/unit/` — covers
+  the taxonomy search/lookup composable, the HS pickers (typeahead, keyboard nav, virtualisation),
+  the thread composables/store (mocking `src/services/api.ts`'s `apiRequest`, never a live
+  backend), and every analysis component/state (including missing-data rendering, provisional-year
+  footnotes, and each error/empty/loading state). Hand-written fixtures matching
+  `src/types/generated.ts` live in `tests/fixtures/`.
 - **E2E**: `npm run test:e2e` (Playwright). First run: `npx playwright install --with-deps
-chromium`. See `tests/e2e/` — the smoke test loads the landing page and clicks through to the
-  category picker.
+chromium`. See `tests/e2e/` — walks the full journey (search → category → item → rendered
+  analysis) against the real bundled `public/hs-taxonomy.json`, with backend calls mocked via
+  Playwright route interception (`tests/e2e/fixtures.ts`); also covers the budget-exhaustion error
+  state and keyboard-only category selection.
 
 ## CI
 
@@ -82,5 +93,12 @@ chromium`. See `tests/e2e/` — the smoke test loads the landing page and clicks
 backend uses — [`datasets/harmonized-system`](https://github.com/datasets/harmonized-system)
 (ODC-PDDL, `docs/PLAN.md` Gate 0 finding) — converted from CSV to JSON with the columns renamed to
 this project's `snake_case` convention (`hs_code`, `description`, `level`, `section`, `parent`).
-It's real data, checked in as-is; **indexing and searching it (MiniSearch, virtualised list) is
-Phase 3 work** — see the `// TODO(Phase 3)` in `src/composables/useHsTaxonomy.ts`.
+
+`src/composables/useHsTaxonomy.ts` loads it once per page session and builds a
+[MiniSearch](https://lucaong.github.io/minisearch/) index over the level-2 (chapter) rows for
+`CategorySearch.vue`'s typeahead. Level-6 items under a selected chapter
+(`ItemList.vue`) are a plain prefix filter on `hs_code`, not a second search index — HS codes are
+structurally prefix-nested (a level-6 code always begins with its level-4 heading, which always
+begins with its level-2 chapter), so no index is needed for that step. Both pickers are
+virtualised (`src/components/common/VirtualList.vue`) since some chapters have 500+ items. All of
+this is client-side only — zero backend/model calls for search or browsing (master brief §7.3).
