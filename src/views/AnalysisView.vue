@@ -84,7 +84,7 @@ const isEmpty = computed(() => {
     </EmptyState>
 
     <template v-else-if="latestResult">
-      <h1 class="view__title">Trade analysis — HS {{ latestResult.hs_code }}</h1>
+      <h1 class="view__title" tabindex="-1">Trade analysis — HS {{ latestResult.hs_code }}</h1>
 
       <AnalysisSummary
         :item-description="latestResult.item_description"

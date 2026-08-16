@@ -30,7 +30,7 @@ function onSelect(item: HsTaxonomyEntry): void {
     <p class="view__breadcrumb">
       <RouterLink :to="{ name: ROUTE_NAMES.HS_CATEGORY }">← Back to categories</RouterLink>
     </p>
-    <h1>{{ category ? category.description : `Category ${categoryCode}` }}</h1>
+    <h1 tabindex="-1">{{ category ? category.description : `Category ${categoryCode}` }}</h1>
     <p class="view__hint">Select an item to see its 5-year import/export analysis.</p>
     <ItemList :category-code="categoryCode" @select="onSelect" />
   </main>

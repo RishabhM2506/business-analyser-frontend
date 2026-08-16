@@ -13,6 +13,7 @@ import { isListNavigationKey, nextActiveIndex } from '@/components/common/listNa
 import LoadingState from '@/components/common/LoadingState.vue'
 import VirtualList from '@/components/common/VirtualList.vue'
 import { useHsTaxonomy, type HsTaxonomyEntry } from '@/composables/useHsTaxonomy'
+import { isNavigationBlocked, markNavigating } from '@/router'
 
 const ITEM_HEIGHT = 56
 const MAX_LIST_HEIGHT = 480
@@ -45,7 +46,20 @@ function optionId(index: number): string {
   return `${listboxId}-option-${index}`
 }
 
-function selectEntry(entry: HsTaxonomyEntry): void {
+/**
+ * Phase 4 finding M18/Frontend-QA#6 — see CategorySearch.vue's identical
+ * guard for the full rationale. Applied symmetrically here too (not just
+ * where the bug was reproduced) since the same hazard could in principle
+ * recur at this navigation boundary. `pointerEvent` is present only for a
+ * real mouse/touch click, omitted for keyboard Enter/Space.
+ */
+function selectEntry(entry: HsTaxonomyEntry, pointerEvent?: MouseEvent): void {
+  if (pointerEvent && isNavigationBlocked(pointerEvent.clientX, pointerEvent.clientY)) {
+    return
+  }
+  if (pointerEvent) {
+    markNavigating(pointerEvent.clientX, pointerEvent.clientY)
+  }
   emit('select', entry)
 }
 
@@ -98,7 +112,7 @@ function onKeydown(event: KeyboardEvent): void {
             class="item-list__option"
             :class="{ 'item-list__option--active': index === activeIndex }"
             @mousedown.prevent
-            @click="selectEntry(item)"
+            @click="(event) => selectEntry(item, event)"
             @keydown.enter.prevent="selectEntry(item)"
             @keydown.space.prevent="selectEntry(item)"
             @mouseenter="activeIndex = index"

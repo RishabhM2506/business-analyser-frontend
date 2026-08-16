@@ -12,6 +12,7 @@ import { isListNavigationKey, nextActiveIndex } from '@/components/common/listNa
 import LoadingState from '@/components/common/LoadingState.vue'
 import VirtualList from '@/components/common/VirtualList.vue'
 import { useHsTaxonomy, type HsTaxonomyEntry } from '@/composables/useHsTaxonomy'
+import { isNavigationBlocked, markNavigating } from '@/router'
 
 const ITEM_HEIGHT = 48
 const MAX_LIST_HEIGHT = 320
@@ -71,7 +72,19 @@ function closeList(): void {
   activeIndex.value = -1
 }
 
-function selectEntry(entry: HsTaxonomyEntry): void {
+/**
+ * `pointerEvent` is present only for a real mouse/touch click (omitted for
+ * keyboard Enter/Space, which have no analogous coordinate-based hazard —
+ * see router/index.ts's isNavigationBlocked/markNavigating doc comment for
+ * the full M18/Frontend-QA#6 rationale).
+ */
+function selectEntry(entry: HsTaxonomyEntry, pointerEvent?: MouseEvent): void {
+  if (pointerEvent && isNavigationBlocked(pointerEvent.clientX, pointerEvent.clientY)) {
+    return
+  }
+  if (pointerEvent) {
+    markNavigating(pointerEvent.clientX, pointerEvent.clientY)
+  }
   query.value = entry.description
   closeList()
   emit('select', entry)
@@ -153,7 +166,7 @@ function onKeydown(event: KeyboardEvent): void {
             class="category-search__option"
             :class="{ 'category-search__option--active': index === activeIndex }"
             @mousedown.prevent
-            @click="selectEntry(item)"
+            @click="(event) => selectEntry(item, event)"
             @keydown.enter.prevent="selectEntry(item)"
             @keydown.space.prevent="selectEntry(item)"
             @mouseenter="activeIndex = index"

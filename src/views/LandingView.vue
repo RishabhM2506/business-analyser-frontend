@@ -24,7 +24,7 @@ async function startProcess(): Promise<void> {
 
 <template>
   <main class="landing">
-    <h1>Business Analyser</h1>
+    <h1 tabindex="-1">Business Analyser</h1>
     <p>
       Pick an HS trade-code category, then an item, and get a grounded 5-year import/export analysis
       for its top trading partners.

@@ -14,7 +14,7 @@ function onSelect(category: HsTaxonomyEntry): void {
 
 <template>
   <main class="view">
-    <h1>Choose a category</h1>
+    <h1 tabindex="-1">Choose a category</h1>
     <p class="view__hint">Search by name (e.g. "food", "textiles") or by chapter number.</p>
     <CategorySearch @select="onSelect" />
   </main>
