@@ -20,12 +20,31 @@ const sortedRows = computed<CountryRow[]>(() =>
   [...props.table.rows].sort((a, b) => a.rank - b.rank),
 )
 
+// Finding M21/PBO-03: a year outside `years_finalized` used to be treated
+// as uniformly "provisional — not yet finalized", which is actively
+// misleading for a year with zero records at all (commonly because this
+// HS6 code didn't exist yet in that year's HS nomenclature edition — there
+// is nothing to finalize, ever). `years_no_data` isolates that case on the
+// backend; the two sets are disjoint by construction there, so a year is
+// "provisional" here iff it's neither finalized nor no-data.
+const noDataYears = computed(() => props.table.years_no_data ?? [])
+
 const provisionalYears = computed(() =>
-  props.table.years.filter((year) => !props.table.years_finalized.includes(year)),
+  props.table.years.filter(
+    (year) => !props.table.years_finalized.includes(year) && !noDataYears.value.includes(year),
+  ),
 )
 
 function isFinalized(year: number): boolean {
   return props.table.years_finalized.includes(year)
+}
+
+function isNoData(year: number): boolean {
+  return noDataYears.value.includes(year)
+}
+
+function isProvisional(year: number): boolean {
+  return !isFinalized(year) && !isNoData(year)
 }
 
 // Phase 4 finding M23/PBO-05: the "—" marker is mechanically correct (a
@@ -70,8 +89,10 @@ const hasMissingData = computed(() =>
               <th scope="col">Rank</th>
               <th scope="col">Country</th>
               <th v-for="year in table.years" :key="year" scope="col" class="trade-table__value">
-                {{ year }}<sup v-if="!isFinalized(year)" aria-hidden="true">*</sup>
-                <span v-if="!isFinalized(year)" class="visually-hidden">(provisional)</span>
+                {{ year }}<sup v-if="isProvisional(year)" aria-hidden="true">*</sup>
+                <sup v-if="isNoData(year)" aria-hidden="true">&dagger;</sup>
+                <span v-if="isProvisional(year)" class="visually-hidden">(provisional)</span>
+                <span v-if="isNoData(year)" class="visually-hidden">(no data recorded)</span>
               </th>
               <th scope="col" class="trade-table__value">5-yr total</th>
             </tr>
@@ -92,6 +113,12 @@ const hasMissingData = computed(() =>
       <p class="trade-table__footnote">Values in {{ table.unit }}.</p>
       <p v-if="provisionalYears.length > 0" class="trade-table__footnote">
         * Provisional — not yet finalized by the data source: {{ provisionalYears.join(', ') }}.
+      </p>
+      <p v-if="noDataYears.length > 0" class="trade-table__footnote">
+        &dagger; No data recorded for this year: {{ noDataYears.join(', ') }}. This may mean this HS
+        classification code did not exist in that year's edition of the HS nomenclature, or that
+        nothing has been reported. Unlike a provisional year, this is not expected to be added
+        later.
       </p>
       <p v-if="hasMissingData" class="trade-table__footnote">
         "—" means no figure was reported for that country and year — it does not mean zero trade

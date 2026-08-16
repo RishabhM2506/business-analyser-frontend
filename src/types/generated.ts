@@ -73,6 +73,16 @@ export interface TradeTable {
   years: number[]
   /** Subset of `years` NOT flagged provisional by Comtrade. */
   years_finalized: number[]
+  /**
+   * Subset of `years` with ZERO retained records at all (finding
+   * M21/PBO-03) — disjoint from `years_finalized`'s complement. A year here
+   * commonly means this HS6 code didn't exist in that year's HS
+   * nomenclature edition, not that data is still settling; render with
+   * different, non-promissory copy than a genuinely provisional year.
+   * Optional for backward compatibility with any stale fixture/mock data
+   * that predates this field — treat a missing value as `[]`.
+   */
+  years_no_data?: number[]
   /** Transparency: aggregate/"nes" partner codes stripped before ranking. */
   excluded_partner_codes: string[]
   /** Top 10, ranked. */

@@ -8,6 +8,7 @@ import {
   FIXTURE_EMPTY_TRADE_TABLE,
   FIXTURE_EXPORTS_TABLE,
   FIXTURE_IMPORTS_TABLE,
+  FIXTURE_IMPORTS_TABLE_WITH_NO_DATA_YEAR,
 } from '../fixtures/tradeAnalysisResponse'
 
 describe('TradeTable', () => {
@@ -65,6 +66,45 @@ describe('TradeTable', () => {
     expect(finalizedHeader?.text()).not.toContain('*')
     expect(wrapper.text()).toContain('Provisional')
     expect(wrapper.text()).toContain('2025')
+  })
+
+  it('marks a no-data year distinctly from a provisional year, with its own footnote (M21/PBO-03)', () => {
+    const wrapper = mount(TradeTable, {
+      props: { title: 'Imports', table: FIXTURE_IMPORTS_TABLE_WITH_NO_DATA_YEAR },
+    })
+    const headers = wrapper.findAll('thead th')
+
+    // 2021 has zero records - "no data", not "provisional".
+    const year2021Header = headers.find((h) => h.text().startsWith('2021'))
+    expect(year2021Header?.text()).toContain('†')
+    expect(year2021Header?.text()).not.toContain('*')
+
+    // 2025 has records but isn't finalized - still genuinely "provisional".
+    const year2025Header = headers.find((h) => h.text().startsWith('2025'))
+    expect(year2025Header?.text()).toContain('*')
+    expect(year2025Header?.text()).not.toContain('†')
+
+    // A fully finalized year gets neither marker.
+    const year2022Header = headers.find((h) => h.text().startsWith('2022'))
+    expect(year2022Header?.text()).not.toContain('*')
+    expect(year2022Header?.text()).not.toContain('†')
+
+    // The provisional footnote must not list the no-data year, and vice versa.
+    const text = wrapper.text()
+    expect(text).toContain('No data recorded for this year')
+    expect(text).toContain('not expected to be added later')
+    const provisionalFootnote = wrapper
+      .findAll('.trade-table__footnote')
+      .find((p) => p.text().startsWith('* Provisional'))
+    expect(provisionalFootnote?.text()).toContain('2025')
+    expect(provisionalFootnote?.text()).not.toContain('2021')
+  })
+
+  it('does not show the no-data footnote when years_no_data is absent (older/stale fixture shape)', () => {
+    // FIXTURE_IMPORTS_TABLE predates this field entirely - the component
+    // must not crash or misbehave on a table shaped without it.
+    const wrapper = mount(TradeTable, { props: { title: 'Imports', table: FIXTURE_IMPORTS_TABLE } })
+    expect(wrapper.text()).not.toContain('No data recorded for this year')
   })
 
   it('shows the excluded-partner-codes transparency footnote only when there are any', () => {
