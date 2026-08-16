@@ -16,6 +16,22 @@ export const E2E_ITEM_DESCRIPTION = 'Horses; live, pure-bred breeding animals'
 
 export const E2E_THREAD_ID = 'e2e-thread-1'
 
+/**
+ * Phase 4 finding M18/Frontend-QA#6: `router/index.ts`'s navigation lockout
+ * blocks a second mouse-driven selection landing within ~40px of a previous
+ * one for `NAVIGATION_LOCKOUT_MS` (400ms) — this is what stops the reported
+ * fast-double-click bug (see that file's doc comment for the full
+ * rationale, including why position alone isn't enough: the category and
+ * item rows can land only a few px apart in this app's real layout). A
+ * scripted `.click()` immediately followed by another `.click()` with zero
+ * delay is not a realistic stand-in for a human's two *separate, deliberate*
+ * selections (choosing a category, then choosing an item on the next
+ * screen) — real specs exercising that normal sequential flow should wait
+ * at least this long between the two clicks so they aren't misread as the
+ * same double-click echo the lockout exists to catch.
+ */
+export const NAVIGATION_LOCKOUT_CLEAR_MS = 450
+
 export const E2E_ANALYSIS_ENVELOPE: ResponseEnvelope = {
   type: 'final',
   data: {

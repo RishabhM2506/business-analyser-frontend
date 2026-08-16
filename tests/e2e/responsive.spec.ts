@@ -6,6 +6,7 @@ import {
   E2E_CATEGORY_QUERY,
   E2E_ITEM_DESCRIPTION,
   E2E_THREAD_ID,
+  NAVIGATION_LOCKOUT_CLEAR_MS,
 } from './fixtures'
 
 /**
@@ -43,6 +44,8 @@ test.describe('mobile viewport — no page-level horizontal scroll', () => {
     await page.getByRole('button', { name: 'Start my process' }).click()
     await page.getByRole('combobox', { name: /search hs categories/i }).fill(E2E_CATEGORY_QUERY)
     await page.getByRole('option', { name: /Animals; live/i }).click()
+    await expect(page).toHaveURL(/\/categories\/01\/items$/)
+    await page.waitForTimeout(NAVIGATION_LOCKOUT_CLEAR_MS) // see fixtures.ts's M18 note
     await page.getByRole('option', { name: new RegExp(E2E_ITEM_DESCRIPTION) }).click()
     await expect(page).toHaveURL(/\/analysis\/010121$/)
     await expect(page.getByRole('heading', { name: 'Imports' })).toBeVisible()
@@ -173,6 +176,8 @@ test.describe('a long unbroken word in analysis prose does not overflow the page
     await page.getByRole('button', { name: 'Start my process' }).click()
     await page.getByRole('combobox', { name: /search hs categories/i }).fill(E2E_CATEGORY_QUERY)
     await page.getByRole('option', { name: /Animals; live/i }).click()
+    await expect(page).toHaveURL(/\/categories\/01\/items$/)
+    await page.waitForTimeout(NAVIGATION_LOCKOUT_CLEAR_MS) // see fixtures.ts's M18 note
     await page.getByRole('option', { name: new RegExp(E2E_ITEM_DESCRIPTION) }).click()
     await expect(page.getByText(LONG_TOKEN)).toBeVisible()
 

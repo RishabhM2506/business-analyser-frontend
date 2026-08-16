@@ -5,6 +5,7 @@ import {
   E2E_CATEGORY_QUERY,
   E2E_ITEM_DESCRIPTION,
   E2E_THREAD_ID,
+  NAVIGATION_LOCKOUT_CLEAR_MS,
 } from './fixtures'
 
 /**
@@ -50,7 +51,10 @@ test.describe('focus management on route change (M17)', () => {
       .poll(() => page.evaluate(() => document.activeElement?.textContent))
       .toBe('Animals; live')
 
-    // Items -> Analysis (heading only exists once loading finishes)
+    // Items -> Analysis (heading only exists once loading finishes). See
+    // fixtures.ts's NAVIGATION_LOCKOUT_CLEAR_MS doc comment (M18): this is a
+    // second, separate, deliberate selection, not a double-click echo.
+    await page.waitForTimeout(NAVIGATION_LOCKOUT_CLEAR_MS)
     await page.getByRole('option', { name: new RegExp(E2E_ITEM_DESCRIPTION) }).click()
     await expect(page).toHaveURL(/\/analysis\//)
     await expect(page.getByRole('heading', { name: /trade analysis/i })).toBeVisible()

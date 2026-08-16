@@ -6,6 +6,7 @@ import {
   E2E_CATEGORY_QUERY,
   E2E_ITEM_DESCRIPTION,
   E2E_THREAD_ID,
+  NAVIGATION_LOCKOUT_CLEAR_MS,
 } from './fixtures'
 
 /**
@@ -43,6 +44,11 @@ test.describe('full analysis flow', () => {
     await expect(page).toHaveURL(/\/categories\/01\/items$/)
     await expect(page.getByRole('heading', { name: 'Animals; live' })).toBeVisible()
 
+    // See fixtures.ts's NAVIGATION_LOCKOUT_CLEAR_MS doc comment (M18): a
+    // real user picking a category then an item is two separate, deliberate
+    // choices, not a double-click echo — wait past the lockout so this
+    // realistic sequential flow isn't mistaken for the bug it guards against.
+    await page.waitForTimeout(NAVIGATION_LOCKOUT_CLEAR_MS)
     const itemOption = page.getByRole('option', { name: new RegExp(E2E_ITEM_DESCRIPTION) })
     await expect(itemOption).toBeVisible()
     await itemOption.click()
@@ -88,6 +94,8 @@ test.describe('full analysis flow', () => {
     await page.getByRole('button', { name: 'Start my process' }).click()
     await page.getByRole('combobox', { name: /search hs categories/i }).fill(E2E_CATEGORY_QUERY)
     await page.getByRole('option', { name: /Animals; live/i }).click()
+    await expect(page).toHaveURL(/\/categories\/01\/items$/)
+    await page.waitForTimeout(NAVIGATION_LOCKOUT_CLEAR_MS) // see M18 note above
     await page.getByRole('option', { name: new RegExp(E2E_ITEM_DESCRIPTION) }).click()
 
     const alert = page.getByRole('alert')

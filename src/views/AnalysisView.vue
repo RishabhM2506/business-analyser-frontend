@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
-import { computed, onMounted, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 
 import AnalysisSummary from '@/components/analysis/AnalysisSummary.vue'
 import ProvenanceFootnote from '@/components/analysis/ProvenanceFootnote.vue'
@@ -39,6 +39,24 @@ const isEmpty = computed(() => {
     return false
   }
   return result.imports.rows.length === 0 && result.exports.rows.length === 0
+})
+
+// Phase 4 finding M17/Frontend-QA#5: router/index.ts's afterEach hook
+// focuses the new route's <h1> on every navigation, but this view's <h1>
+// doesn't exist in the DOM at all until `latestResult` is set (the fetch is
+// asynchronous — the router's one-shot nextTick after the route change fires
+// while this is still showing LoadingState). This view is the one place
+// that gap matters most (it's the actual destination, not an intermediate
+// picker step), so it focuses its own heading the moment it actually
+// appears — covering both the initial load and a later hsCode change under
+// this same mounted view.
+const headingRef = ref<HTMLHeadingElement | null>(null)
+watch(latestResult, (result) => {
+  if (result) {
+    void nextTick(() => {
+      headingRef.value?.focus()
+    })
+  }
 })
 </script>
 
@@ -84,7 +102,9 @@ const isEmpty = computed(() => {
     </EmptyState>
 
     <template v-else-if="latestResult">
-      <h1 class="view__title" tabindex="-1">Trade analysis — HS {{ latestResult.hs_code }}</h1>
+      <h1 ref="headingRef" class="view__title" tabindex="-1">
+        Trade analysis — HS {{ latestResult.hs_code }}
+      </h1>
 
       <AnalysisSummary
         :item-description="latestResult.item_description"
