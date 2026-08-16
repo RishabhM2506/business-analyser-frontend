@@ -60,8 +60,14 @@ test.describe('cross-repo live integration (no mocks — real backend, real Comt
     // what's never acceptable is neither appearing (B1: an unhandled
     // envelope-unwrap failure throws inside useThread.sendMessage before
     // either state renders).
+    // `role="alert"` (ErrorState.vue's own outer element) is the single
+    // authoritative signal for the error case — deliberately not also
+    // matching on error text: that text is a *descendant* of the alert
+    // element, so combining both in one `.or()` matched two elements at
+    // once and made Playwright's strict-mode assertion fail regardless of
+    // which state actually rendered (caught in Architect re-review, ARCH-14).
     const heading = page.getByRole('heading', { name: /trade analysis/i })
-    const errorState = page.getByRole('alert').or(page.getByText(/could not retrieve|budget/i))
+    const errorState = page.getByRole('alert')
     await expect(heading.or(errorState)).toBeVisible({ timeout: 25_000 })
 
     // B1's exact failure mode: an unwrap exception thrown client-side.
@@ -75,12 +81,17 @@ test.describe('cross-repo live integration (no mocks — real backend, real Comt
   test('a second, different item on the same session-thread does not hit BUDGET_EXCEEDED (B2)', async ({
     page,
   }) => {
+    // `role="alert"`/heading are each a single element apiece (see the
+    // first test's comment on ARCH-14) — safe to `.or()` together. Text-based
+    // locators are deliberately not combined into that same expression:
+    // M19's fix added explanatory copy that itself mentions "budget," so a
+    // page-wide `getByText(/budget/i)` can match more than one element and
+    // reintroduce the exact strict-mode failure ARCH-14 already caught once.
+    const heading = page.getByRole('heading', { name: /trade analysis/i })
+    const alert = page.getByRole('alert')
+
     await pickFirstCategoryThenItem(page)
-    await page
-      .getByRole('heading', { name: /trade analysis/i })
-      .or(page.getByText(/could not retrieve|budget/i))
-      .first()
-      .waitFor({ timeout: 25_000 })
+    await expect(heading.or(alert)).toBeVisible({ timeout: 25_000 })
 
     await page.getByRole('link', { name: /back to categories/i }).click()
     await page.getByRole('combobox').fill(REAL_HS6_CATEGORY_QUERY)
@@ -89,16 +100,14 @@ test.describe('cross-repo live integration (no mocks — real backend, real Comt
     await page.getByRole('option').first().waitFor()
     await page.getByRole('option').first().click()
 
-    const heading = page.getByRole('heading', { name: /trade analysis/i })
-    const genuineUpstreamError = page.getByText(/could not retrieve/i)
-    const budgetExceeded = page.getByText(/budget/i)
-
-    await expect(heading.or(genuineUpstreamError).or(budgetExceeded)).toBeVisible({
-      timeout: 25_000,
-    })
+    await expect(heading.or(alert)).toBeVisible({ timeout: 25_000 })
     // The one outcome B2 exists to rule out on a 2nd item in one session —
-    // a live upstream rate-limit (genuineUpstreamError) is a fine, expected
-    // outcome; the budget ceiling tripping on item #2 is not.
-    await expect(budgetExceeded).not.toBeVisible()
+    // a live upstream rate-limit (the alert's text containing "could not
+    // retrieve") is a fine, expected outcome; the budget ceiling tripping
+    // on item #2 is not. Scoped to the alert element's own text, not a
+    // page-wide search, so it can't accidentally match M19's unrelated copy.
+    if (await alert.isVisible()) {
+      await expect(alert).not.toContainText(/budget/i)
+    }
   })
 })
