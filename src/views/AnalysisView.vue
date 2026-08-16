@@ -1,14 +1,117 @@
 <script setup lang="ts">
-// TODO(Phase 3): call useThreadStore().submitQuery({ hs_code: hsCode }), then
-// render TradeTable (imports/exports), AnalysisSummary, and
-// ProvenanceFootnote from the resulting TradeAnalysisResponse. Loading/error
-// states from common/ wire in here.
-defineProps<{ hsCode: string }>()
+import { storeToRefs } from 'pinia'
+import { computed, onMounted, watch } from 'vue'
+
+import AnalysisSummary from '@/components/analysis/AnalysisSummary.vue'
+import ProvenanceFootnote from '@/components/analysis/ProvenanceFootnote.vue'
+import TradeTable from '@/components/analysis/TradeTable.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
+import ErrorState from '@/components/common/ErrorState.vue'
+import LoadingState from '@/components/common/LoadingState.vue'
+import { ROUTE_NAMES } from '@/constants/routes'
+import { useThreadStore } from '@/stores/thread'
+
+const props = defineProps<{ hsCode: string }>()
+
+const store = useThreadStore()
+const { messages, loading, error } = storeToRefs(store)
+
+// POST /threads/{id}/messages (docs/PLAN.md §3.3) on item selection —
+// re-fires if the route's hsCode ever changes under this same mounted view.
+function runQuery(): void {
+  void store.submitQuery({ hs_code: props.hsCode })
+}
+
+onMounted(runQuery)
+watch(() => props.hsCode, runQuery)
+
+// v1 renders only the latest message (no multi-turn UI — out of scope per
+// master brief §2.3/§3) even though the store keeps the full thread history
+// for when that roadmap item ships.
+const latestResult = computed(() => messages.value.at(-1) ?? null)
+
+// A schema-valid, non-error response can still legitimately carry zero
+// trading partners for either flow — distinct from an ApiError, and worth
+// its own explicit state rather than rendering two silently-empty tables.
+const isEmpty = computed(() => {
+  const result = latestResult.value
+  if (!result) {
+    return false
+  }
+  return result.imports.rows.length === 0 && result.exports.rows.length === 0
+})
 </script>
 
 <template>
   <main class="view">
-    <h1>AnalysisView</h1>
-    <p>Phase 3: chat-style rendered result for HS code {{ hsCode }}.</p>
+    <p class="view__breadcrumb">
+      <RouterLink :to="{ name: ROUTE_NAMES.HS_CATEGORY }">← Back to categories</RouterLink>
+    </p>
+
+    <LoadingState v-if="loading" message="Fetching trade data…" />
+
+    <ErrorState
+      v-else-if="error"
+      :message="error.message"
+      :retryable="error.retryable"
+      @retry="runQuery"
+    >
+      <RouterLink
+        v-if="error.errorCode === 'INVALID_HS_CODE'"
+        :to="{ name: ROUTE_NAMES.HS_CATEGORY }"
+      >
+        Choose a different category
+      </RouterLink>
+    </ErrorState>
+
+    <EmptyState
+      v-else-if="isEmpty"
+      message="No trade data is available for this item in the selected period."
+    >
+      <RouterLink :to="{ name: ROUTE_NAMES.HS_CATEGORY }">Try a different category</RouterLink>
+    </EmptyState>
+
+    <template v-else-if="latestResult">
+      <h1 class="view__title">Trade analysis — HS {{ latestResult.hs_code }}</h1>
+
+      <AnalysisSummary
+        :item-description="latestResult.item_description"
+        :analytical-summary="latestResult.analytical_summary"
+      />
+
+      <TradeTable title="Imports" :table="latestResult.imports" />
+      <TradeTable title="Exports" :table="latestResult.exports" />
+
+      <ProvenanceFootnote :provenance="latestResult.provenance" />
+    </template>
+
+    <!-- Covers the brief pre-mount tick before onMounted's query has set
+         loading — never an empty frame between navigation and the spinner. -->
+    <LoadingState v-else />
   </main>
 </template>
+
+<style scoped>
+.view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  max-width: 56rem;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-4);
+}
+
+.view__breadcrumb {
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
+.view__breadcrumb a {
+  color: var(--color-primary);
+}
+
+.view__title {
+  font-size: var(--font-size-xl);
+  margin: 0;
+}
+</style>
