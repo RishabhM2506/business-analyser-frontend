@@ -1,7 +1,12 @@
 # Contributing
 
-This is a private repo (`RishabhM2506/business-analyser-frontend`). These notes exist mainly so
-future-me (or anyone I add as a collaborator) doesn't have to reverse-engineer the workflow.
+This repo (`RishabhM2506/business-analyser-frontend`) is public on GitHub (GitHub blocks branch
+protection on private repos without a paid plan, and this project uses branch protection — a
+deliberate, accepted trade-off, not an oversight). It is not open-source: see `LICENSE` — all
+rights reserved, no license is granted to external contributors. No secrets are ever committed
+regardless of visibility (enforced by `.gitignore` and secret-scanning CI on every push). These
+notes exist mainly so future-me (or anyone I add as a collaborator) doesn't have to
+reverse-engineer the workflow.
 
 ## Commit messages — Conventional Commits
 
