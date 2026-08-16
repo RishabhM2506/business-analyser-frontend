@@ -72,8 +72,13 @@ export class ApiError extends Error {
   }
 }
 
-/** Type guard for a body shaped like `ErrorResponse` (docs/PLAN.md §3.2). */
-function isErrorResponseBody(data: unknown): data is ErrorResponse {
+/**
+ * Type guard for a body shaped like `ErrorResponse` (docs/PLAN.md §3.2).
+ * Exported for `useThread.ts`'s own defense-in-depth check (ARCH-01/B1) —
+ * see that file's comment for why it re-checks this after `apiRequest`
+ * already resolved, not just here.
+ */
+export function isErrorResponseBody(data: unknown): data is ErrorResponse {
   return (
     typeof data === 'object' &&
     data !== null &&

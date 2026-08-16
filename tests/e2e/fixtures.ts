@@ -111,7 +111,16 @@ const E2E_BUDGET_EXCEEDED_ERROR_RESPONSE: ErrorResponse = {
   trace_id: 'e2e-trace-budget',
 }
 
-export const E2E_BUDGET_EXCEEDED_ENVELOPE: ResponseEnvelope = {
+// Deliberately not typed `ResponseEnvelope`: that type's 'final' variant is
+// `data: TradeAnalysisResponse` (the shape `useStreamingResponse.ts`'s
+// success path expects — the real backend always sends an error via a
+// non-2xx status, which `services/api.ts`'s interceptor intercepts and
+// converts to a rejected ApiError before this shape would ever reach that
+// code, per app/main.py's `_ERROR_STATUS_CODES`). This fixture instead
+// stands in for the raw, unshaped wire body Playwright's route mock hands
+// back — exactly what a real `{status: 429, body: ...}` response looks like
+// before any TypeScript type applies to it.
+export const E2E_BUDGET_EXCEEDED_ENVELOPE: { type: 'final'; data: ErrorResponse } = {
   type: 'final',
   data: E2E_BUDGET_EXCEEDED_ERROR_RESPONSE,
 }

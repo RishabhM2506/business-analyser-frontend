@@ -103,4 +103,36 @@ describe('useThread', () => {
     mockedApiRequest.mockResolvedValueOnce({ type: 'delta', data: {} })
     await expect(sendMessage({ hs_code: '010121' })).rejects.toThrow(/final result/i)
   })
+
+  it('rejects with a real ApiError (not a silent success) if a "final" envelope somehow resolves with an error-shaped data payload', async () => {
+    // Defense-in-depth regression test for ARCH-01/B1: services/api.ts's own
+    // interceptor is expected to reject an enveloped ErrorResponse before
+    // apiRequest ever resolves (every real error_code arrives on a non-2xx
+    // status), so this simulates the case that guarantee doesn't hold —
+    // e.g. a mocked apiRequest in a test, or a hypothetical future backend
+    // inconsistency. Without useThread's own defensive check, this
+    // error-shaped payload would silently be returned as if it were a
+    // genuine TradeAnalysisResponse instead of being recognized as a failure.
+    mockedApiRequest.mockResolvedValueOnce({ thread_id: 'thread-abc' })
+    const { createThread, sendMessage } = useThread()
+    await createThread()
+
+    mockedApiRequest.mockResolvedValueOnce({
+      type: 'final',
+      data: {
+        error_code: 'BUDGET_EXCEEDED',
+        message: 'The model-call budget for this thread or day has been reached.',
+        retryable: true,
+        trace_id: 'trace-defense-in-depth',
+      },
+    })
+
+    const failure = sendMessage({ hs_code: '010121' })
+    await expect(failure).rejects.toBeInstanceOf(ApiError)
+    await expect(failure).rejects.toMatchObject({
+      errorCode: 'BUDGET_EXCEEDED',
+      retryable: true,
+      traceId: 'trace-defense-in-depth',
+    })
+  })
 })
