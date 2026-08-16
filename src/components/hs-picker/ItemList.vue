@@ -105,7 +105,7 @@ function onKeydown(event: KeyboardEvent): void {
             @focusin="activeIndex = index"
           >
             <span class="item-list__code">{{ item.hs_code }}</span>
-            <span class="item-list__desc">{{ item.description }}</span>
+            <span class="item-list__desc" :title="item.description">{{ item.description }}</span>
           </li>
         </template>
       </VirtualList>
@@ -158,5 +158,19 @@ function onKeydown(event: KeyboardEvent): void {
 
 .item-list__desc {
   flex: 1;
+  /* VirtualList's offset math assumes every row is exactly ITEM_HEIGHT tall
+   * (Phase 4 finding M12/Frontend-Reviewer#1) — nothing enforced that before
+   * this rule, and real taxonomy item descriptions run up to 255 chars
+   * (verified against the real checked-in public/hs-taxonomy.json: median 95
+   * chars, p90 181, max 255 — not the 13-54 char test fixtures), which wrap
+   * to 2-4 lines and break the virtualizer's spacer-height/scroll-offset
+   * calculations on both mobile (median case) and desktop (tail case).
+   * `min-width: 0` is required alongside `flex: 1` for `text-overflow:
+   * ellipsis` to take effect at all inside a flex row.
+   */
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 </style>

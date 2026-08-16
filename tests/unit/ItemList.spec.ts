@@ -74,6 +74,54 @@ describe('ItemList', () => {
     expect(emitted?.[0]?.[0]).toMatchObject({ hs_code: '010129' })
   })
 
+  it('keeps a real long description fully intact in the DOM (M12: CSS-only truncation, never a lossy string truncation)', async () => {
+    // Regression test for Phase 4 finding M12/Frontend-Reviewer#1: VirtualList's
+    // fixed-row-height math depends on `.item-list__desc` staying a single
+    // visual line (enforced by CSS now — white-space:nowrap + ellipsis), but
+    // that must never come from truncating the underlying string itself
+    // (missing/altered data would violate the "never interpolated, never
+    // silently altered" rule). This exact 255-char description is a real row
+    // from the checked-in public/hs-taxonomy.json (hs_code 293333) — the
+    // longest level-6 description in the real dataset, not a short test
+    // fixture like the other cases in this file.
+    //
+    // Needs genuinely fresh module state (vi.resetModules() + a dynamic
+    // re-import), same as CategorySearch.spec.ts's XSS test: useHsTaxonomy's
+    // singleton would otherwise still be holding FIXTURE_TAXONOMY from an
+    // earlier test in this file and skip re-fetching, per its own
+    // idempotent-load guard — the mock below would never actually be used.
+    const LONG_DESCRIPTION =
+      'Heterocyclic compounds; containing an unfused pyridine ring (whether or not hydrogenated) in the structure, alfentanil (INN), anileridine (INN), bezitramide (INN), bromazepam (INN), carfentanil (INN), difenoxin (INN), diphenoxylate (INN), dipipanone (INN)'
+    expect(LONG_DESCRIPTION.length).toBeGreaterThan(200)
+    vi.resetModules()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => [
+          { hs_code: '01', description: 'Animals; live', level: 2, section: 'I', parent: 'TOTAL' },
+          {
+            hs_code: '010199',
+            description: LONG_DESCRIPTION,
+            level: 6,
+            section: 'I',
+            parent: '0101',
+          },
+        ],
+      }),
+    )
+    const { default: FreshItemList } = await import('@/components/hs-picker/ItemList.vue')
+    const wrapper = mount(FreshItemList, { props: { categoryCode: '01' } })
+    await flushPromises()
+
+    const desc = wrapper.find('.item-list__desc')
+    expect(desc.text()).toBe(LONG_DESCRIPTION)
+    // The full text is also available via `title` (hover) since the visible
+    // row itself is now intentionally single-line/ellipsized.
+    expect(desc.attributes('title')).toBe(LONG_DESCRIPTION)
+  })
+
   it('switching categoryCode (e.g. user navigates back and picks a different category) refreshes the list', async () => {
     const wrapper = await mountLoaded('01')
     expect(wrapper.findAll('[role="option"]')).toHaveLength(2)

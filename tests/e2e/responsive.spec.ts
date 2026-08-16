@@ -76,3 +76,59 @@ test.describe('mobile viewport — no page-level horizontal scroll', () => {
     expect(internal.scrollWidth).toBeGreaterThan(internal.clientWidth)
   })
 })
+
+/**
+ * Regression coverage for Phase 4 finding M12/Frontend-Reviewer#1:
+ * `VirtualList`'s fixed-row-height offset math assumes every row is exactly
+ * `ITEM_HEIGHT` (48px for categories, 56px for items) tall — real taxonomy
+ * descriptions run well past what fits on one line at that height (verified
+ * against the real checked-in public/hs-taxonomy.json: category descriptions
+ * up to 233 chars, item descriptions up to 255), and nothing enforced a
+ * single line before `CategorySearch.vue`/`ItemList.vue` got
+ * `white-space: nowrap; overflow: hidden; text-overflow: ellipsis`.
+ *
+ * This exercises the real, bundled public/hs-taxonomy.json (no mocking of
+ * the taxonomy fetch) with two genuine long-description rows picked from
+ * that real file, specifically so the rendered row height can be measured
+ * for real — jsdom performs no real layout/text-wrapping, so a unit test
+ * cannot observe whether a description actually wrapped to multiple lines,
+ * only whether the right CSS properties are declared (already covered in
+ * CategorySearch.spec.ts/ItemList.spec.ts).
+ */
+test.describe('virtualized picker rows stay a fixed height with real long descriptions (M12)', () => {
+  test('a category with a 233-char real description renders at a single-line row height, not wrapped', async ({
+    page,
+  }) => {
+    await page.goto('/categories')
+    const searchInput = page.getByRole('combobox', { name: /search hs categories/i })
+    // Chapter 34 in the real taxonomy: "Soap, organic surface-active
+    // agents; ..." (233 chars) — the longest level-2 description in the
+    // real dataset.
+    await searchInput.fill('Soap')
+    const option = page.getByRole('option', { name: /Soap, organic surface-active agents/i })
+    await expect(option).toBeVisible()
+
+    const height = await option.evaluate((el) => el.getBoundingClientRect().height)
+    // ITEM_HEIGHT for categories is 48px — allow a little slack for
+    // borders/line-height rounding, but a 2+ line wrap would measure ~80px+.
+    expect(height).toBeLessThanOrEqual(56)
+  })
+
+  test('an item with a 200+ char real description renders at a single-line row height, not wrapped', async ({
+    page,
+  }) => {
+    // Chapter 17 ("Sugars and sugar confectionery"), item 170240 — a real
+    // 202-char description, the 10th item by hs_code sort order in that
+    // chapter, safely within VirtualList's initial render window (no
+    // scrolling needed to bring it into the DOM).
+    await page.goto('/categories/17/items')
+    // Two rows share the same description prefix ("170230"/"170240" both
+    // start "Sugars; glucose and glucose syrup...") — the hs_code disambiguates.
+    const option = page.getByRole('option', { name: /170240/ })
+    await expect(option).toBeVisible()
+
+    const height = await option.evaluate((el) => el.getBoundingClientRect().height)
+    // ITEM_HEIGHT for items is 56px.
+    expect(height).toBeLessThanOrEqual(64)
+  })
+})
