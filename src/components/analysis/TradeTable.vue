@@ -108,7 +108,34 @@ function isFinalized(year: number): boolean {
   font-size: var(--font-size-sm);
 }
 
+/*
+ * `position: relative` here is load-bearing, not decorative (Phase 4 finding
+ * B6/Frontend-QA#2 — real page-level horizontal scroll on mobile, root-caused
+ * empirically: DOM measurement + a real scroll gesture confirmed
+ * `document.documentElement.scrollWidth` exceeded the viewport even though
+ * every element in this table's own layout chain measured clean).
+ *
+ * Root cause: the `.visually-hidden` <caption> and the per-column
+ * "(provisional)" <span> inside a <th> (both `position: absolute`, from
+ * styles/base.css) have no positioned ancestor between them and the document
+ * root — *without* this rule, their containing block is promoted all the way
+ * to the viewport. Their "static position" fallback places them at their
+ * natural in-flow X coordinate *within the table's full unclipped width*
+ * (this table is not virtualized and lays out at its real content width,
+ * e.g. ~900px, even though this box's own `overflow-x: auto` visibly scrolls
+ * it down to fit) — for the last column's "(provisional)" span, that can be
+ * several hundred px to the right, in *viewport* coordinates, completely
+ * bypassing this box's own clipping and leaking into the page's real
+ * scrollable overflow. Making this box `position: relative` makes it the
+ * containing block for those descendants instead, so their overflow is
+ * absorbed by the same box that already correctly clips/scrolls the visible
+ * table content. Verified empirically: without this rule,
+ * `document.documentElement.scrollWidth` measured 730px against a 375px
+ * viewport with ordinary data; with it, 375px (zero page-level overflow),
+ * and the table's own internal horizontal scroll is unaffected.
+ */
 .trade-table__scroll {
+  position: relative;
   overflow-x: auto;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
