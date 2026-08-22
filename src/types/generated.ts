@@ -83,6 +83,29 @@ export interface TradeTable {
    * that predates this field — treat a missing value as `[]`.
    */
   years_no_data?: number[]
+  /**
+   * Real, honest one-line notes (2026-08-20 roadmap decision, live
+   * user-reported finding) for a year whose Comtrade fetch itself failed
+   * after every retry attempt — e.g. `"2022: UN Comtrade returned
+   * retryable status 429"`. Distinct from `years_no_data`: that means
+   * Comtrade was successfully asked and genuinely had nothing; this means
+   * we don't actually know, because we couldn't ask successfully. Each
+   * string is backend-composed from the real caught exception, never
+   * routed through the LLM. Optional for backward compatibility with any
+   * stale fixture/mock data that predates this field — treat a missing
+   * value as `[]`.
+   */
+  fetch_issues?: string[]
+  /**
+   * The `year` half of each `fetch_issues` entry, structured — needed to
+   * correctly exclude a fetch-failed year from the "provisional" `*`
+   * marker rendered per year-column (a fetch failure is not "check back
+   * later"); parsing a year back out of `fetch_issues`' free-text messages
+   * would be fragile. Always exactly `fetch_issues.length` long, same
+   * order. Optional for the same backward-compatibility reason as
+   * `fetch_issues` itself.
+   */
+  fetch_issue_years?: number[]
   /** Transparency: aggregate/"nes" partner codes stripped before ranking. */
   excluded_partner_codes: string[]
   /** Top 10, ranked. */
@@ -142,4 +165,46 @@ export interface ThreadState {
   thread_id: string
   // TODO(Phase 3): replace with the real per-message shape once GET /threads/{id} is implemented.
   messages: unknown[]
+}
+
+/**
+ * Mirrors `ProductSearchQuery` (Pydantic, `app/schemas/query.py`) — the
+ * request body for `POST /threads/{id}/search` (2026-08-20 roadmap
+ * decision: BM25 + vector + LLM-rerank free-text product search).
+ */
+export interface ProductSearchQuery {
+  query_text: string
+  tenant_id?: string
+  user_id?: string
+}
+
+/** Mirrors `RankedCandidateOut` (Pydantic, `app/schemas/response.py`). */
+export interface RankedCandidateOut {
+  hs_code: string
+  description: string
+  relevance_score: number
+}
+
+/**
+ * Mirrors `ProductSearchResponse` (Pydantic, `app/schemas/response.py`).
+ * Unlike `TradeAnalysisResponse`, this is a **bare** response — not wrapped
+ * in a `{type, data}` envelope (the backend route's own docstring: it never
+ * touches the graph/checkpointer, so it has none of that envelope's
+ * streaming-story rationale). `services/api.ts`'s `unwrapEnvelope` already
+ * passes a non-enveloped body through unchanged, so no special-casing is
+ * needed on this side either.
+ */
+export interface ProductSearchResponse {
+  thread_id: string
+  query_text: string
+  /**
+   * `auto_selected`: `selected_hs_code` is set, navigate straight to the
+   * analysis. `disambiguate`: ask the user to pick from `candidates`.
+   * `no_candidates_found`: a normal (non-error) outcome for a query that
+   * matched nothing — same principle as `years_no_data` rendering "no data
+   * recorded," not a failure.
+   */
+  outcome: 'auto_selected' | 'disambiguate' | 'no_candidates_found'
+  selected_hs_code: string | null
+  candidates: RankedCandidateOut[]
 }

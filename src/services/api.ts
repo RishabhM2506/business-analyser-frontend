@@ -25,7 +25,22 @@ import axios, {
 
 import type { ErrorResponse, ResponseEnvelope } from '@/types/generated'
 
-const REQUEST_TIMEOUT_MS = 15_000
+// Raised from 15s (2026-08-20, live-reproduced): a real POST /threads/{id}/
+// messages call legitimately took 25.7s end to end (confirmed from the
+// backend's own structured request logs — a single Gemini `generateContent`
+// call alone took 25.6s that particular time), well past the old timeout,
+// so the client gave up and showed "took too long" on a request the backend
+// was still correctly working on and later returned 200 for. The backend's
+// own real worst-case budget for this endpoint is genuinely large: two
+// sequential model calls (`describe_item` then `summarize`, each up to
+// `_GEMINI_TIMEOUT_SECONDS=20s` with its own internal retries — see
+// `app/models.py`) plus up to 5 Comtrade fetch attempts per year (raised
+// from 3 the same day this was found, `app/tools/comtrade_client.py`) with
+// exponential backoff between them. 60s is comfortable headroom above the
+// real 25.7s case, not the theoretical (much larger) worst case — a request
+// that's still bounded, not unbounded, but no longer tuned to a number that
+// doesn't reflect how long this backend can legitimately take.
+const REQUEST_TIMEOUT_MS = 60_000
 const GENERIC_ERROR_MESSAGE = 'Something went wrong. Please try again.'
 const NETWORK_ERROR_MESSAGE = 'Could not reach the server. Check your connection and try again.'
 const TIMEOUT_ERROR_MESSAGE = 'The request took too long. Please try again.'

@@ -135,6 +135,36 @@ export const FIXTURE_IMPORTS_TABLE_WITH_NO_DATA_YEAR: TradeTable = {
   ],
 }
 
+// 2026-08-20 roadmap decision (live user-reported finding): a year whose
+// Comtrade fetch itself failed after every retry attempt — distinct from
+// both a provisional year and a genuine no-data year (see
+// FIXTURE_IMPORTS_TABLE_WITH_NO_DATA_YEAR above for that pair). 2023 here
+// is the fetch-failed year; 2021 is fully finalized; 2025 is genuinely
+// provisional — three different years, three different footnotes.
+export const FIXTURE_IMPORTS_TABLE_WITH_FETCH_ISSUE: TradeTable = {
+  unit: 'USD',
+  years: [2021, 2022, 2023, 2024, 2025],
+  years_finalized: [2021, 2022, 2024],
+  fetch_issues: ['2023: UN Comtrade returned retryable status 429'],
+  fetch_issue_years: [2023],
+  excluded_partner_codes: [],
+  rows: [
+    makeRow({
+      partner_country: 'United States',
+      partner_code: '842',
+      rank: 1,
+      values_by_year: {
+        '2021': 500_000,
+        '2022': 520_000,
+        '2023': null,
+        '2024': 510_000,
+        '2025': 495_000,
+      },
+      cumulative_5yr: 2_025_000,
+    }),
+  ],
+}
+
 export const FIXTURE_EMPTY_TRADE_ANALYSIS_RESPONSE: TradeAnalysisResponse = {
   ...FIXTURE_TRADE_ANALYSIS_RESPONSE,
   hs_code: '999999',

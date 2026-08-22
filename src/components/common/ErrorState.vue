@@ -27,9 +27,14 @@ defineEmits<{ retry: [] }>()
   flex-direction: column;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-8);
+  padding: var(--space-6) var(--space-8);
   background-color: var(--color-danger-bg);
   color: var(--color-danger);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
+  /* Same --color-danger token already used for the text above — the border
+   * doesn't need independent AA verification (a decorative, non-text
+   * outline), but reusing the verified token keeps it visually coherent
+   * with the text it surrounds rather than introducing an unverified color. */
+  border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
 }
 </style>

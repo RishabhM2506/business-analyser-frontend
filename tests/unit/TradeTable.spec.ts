@@ -8,6 +8,7 @@ import {
   FIXTURE_EMPTY_TRADE_TABLE,
   FIXTURE_EXPORTS_TABLE,
   FIXTURE_IMPORTS_TABLE,
+  FIXTURE_IMPORTS_TABLE_WITH_FETCH_ISSUE,
   FIXTURE_IMPORTS_TABLE_WITH_NO_DATA_YEAR,
 } from '../fixtures/tradeAnalysisResponse'
 
@@ -98,6 +99,46 @@ describe('TradeTable', () => {
       .find((p) => p.text().startsWith('* Provisional'))
     expect(provisionalFootnote?.text()).toContain('2025')
     expect(provisionalFootnote?.text()).not.toContain('2021')
+  })
+
+  it('marks a fetch-failed year distinctly from provisional/no-data years, with its own footnote listing the real reason (2026-08-20)', () => {
+    const wrapper = mount(TradeTable, {
+      props: { title: 'Imports', table: FIXTURE_IMPORTS_TABLE_WITH_FETCH_ISSUE },
+    })
+    const headers = wrapper.findAll('thead th')
+
+    // 2023 could not be fetched - its own marker, not "*" or "†".
+    const year2023Header = headers.find((h) => h.text().startsWith('2023'))
+    expect(year2023Header?.text()).toContain('‡')
+    expect(year2023Header?.text()).not.toContain('*')
+
+    // 2025 is genuinely provisional and must still show "*", unaffected by
+    // the unrelated fetch failure on a different year.
+    const year2025Header = headers.find((h) => h.text().startsWith('2025'))
+    expect(year2025Header?.text()).toContain('*')
+    expect(year2025Header?.text()).not.toContain('‡')
+
+    // A fully finalized year gets no marker at all.
+    const year2021Header = headers.find((h) => h.text().startsWith('2021'))
+    expect(year2021Header?.text()).not.toContain('*')
+    expect(year2021Header?.text()).not.toContain('‡')
+
+    // The footnote lists the real, backend-composed reason verbatim, and
+    // the "*" provisional footnote must not also claim the fetch-failed year.
+    const text = wrapper.text()
+    expect(text).toContain('UN Comtrade returned retryable status 429')
+    expect(text).toContain("doesn't mean the data doesn't exist")
+    const provisionalFootnote = wrapper
+      .findAll('.trade-table__footnote')
+      .find((p) => p.text().startsWith('* Provisional'))
+    expect(provisionalFootnote?.text()).toContain('2025')
+    expect(provisionalFootnote?.text()).not.toContain('2023')
+  })
+
+  it('does not show the fetch-issue footnote when fetch_issues is absent or empty', () => {
+    const wrapper = mount(TradeTable, { props: { title: 'Imports', table: FIXTURE_IMPORTS_TABLE } })
+    expect(wrapper.text()).not.toContain("doesn't mean the data doesn't exist")
+    expect(wrapper.findAll('thead th').some((h) => h.text().includes('‡'))).toBe(false)
   })
 
   it('does not show the no-data footnote when years_no_data is absent (older/stale fixture shape)', () => {

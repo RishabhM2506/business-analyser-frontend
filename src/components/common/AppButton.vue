@@ -32,16 +32,18 @@ defineEmits<{ click: [event: MouseEvent] }>()
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-6);
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   font-family: inherit;
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
   cursor: pointer;
   transition:
     background-color 0.15s ease,
-    border-color 0.15s ease;
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.1s ease;
 }
 
 .app-button:disabled {
@@ -52,10 +54,17 @@ defineEmits<{ click: [event: MouseEvent] }>()
 .app-button--primary {
   background-color: var(--color-primary);
   color: var(--color-primary-contrast);
+  box-shadow: var(--shadow-sm);
 }
 
 .app-button--primary:not(:disabled):hover {
   background-color: var(--color-primary-hover);
+  box-shadow: var(--shadow-md);
+}
+
+.app-button--primary:not(:disabled):active {
+  transform: translateY(1px);
+  box-shadow: var(--shadow-sm);
 }
 
 .app-button--secondary {
@@ -66,5 +75,6 @@ defineEmits<{ click: [event: MouseEvent] }>()
 
 .app-button--secondary:not(:disabled):hover {
   background-color: var(--color-surface);
+  border-color: var(--color-primary);
 }
 </style>

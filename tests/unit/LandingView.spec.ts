@@ -24,6 +24,11 @@ function makeRouter(): Router {
         name: ROUTE_NAMES.HS_CATEGORY,
         component: { template: '<div>categories</div>' },
       },
+      {
+        path: ROUTE_PATHS[ROUTE_NAMES.PRODUCT_SEARCH],
+        name: ROUTE_NAMES.PRODUCT_SEARCH,
+        component: { template: '<div>search</div>' },
+      },
     ],
   })
 }
@@ -54,7 +59,7 @@ describe('LandingView', () => {
     expect(wrapper.text()).toContain("India's")
   })
 
-  it('clicking "Start my process" creates a thread (POST /threads) and navigates to the category picker', async () => {
+  it('clicking "Start my process" creates a thread (POST /threads) and navigates to product search', async () => {
     mockedApiRequest.mockResolvedValueOnce({ thread_id: 'thread-1' })
     const { wrapper, router } = await mountLanding()
 
@@ -62,7 +67,10 @@ describe('LandingView', () => {
     await flushPromises()
 
     expect(mockedApiRequest).toHaveBeenCalledWith('/threads', { method: 'POST' })
-    expect(router.currentRoute.value.name).toBe(ROUTE_NAMES.HS_CATEGORY)
+    // 2026-08-20 roadmap decision: free-text search is now the primary flow,
+    // not the category picker (still reachable from ProductSearchView.vue's
+    // own "Browse by category instead" link).
+    expect(router.currentRoute.value.name).toBe(ROUTE_NAMES.PRODUCT_SEARCH)
   })
 
   it('shows an actionable error state and does not navigate if thread creation fails', async () => {
@@ -102,6 +110,6 @@ describe('LandingView', () => {
     await wrapper.find('button').trigger('click') // the Retry button, inside ErrorState
     await flushPromises()
 
-    expect(router.currentRoute.value.name).toBe(ROUTE_NAMES.HS_CATEGORY)
+    expect(router.currentRoute.value.name).toBe(ROUTE_NAMES.PRODUCT_SEARCH)
   })
 })

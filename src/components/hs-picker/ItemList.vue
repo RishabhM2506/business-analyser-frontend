@@ -202,18 +202,22 @@ function onKeydown(event: KeyboardEvent): void {
 
 .item-list__search-input {
   width: 100%;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background-color: var(--color-bg);
   color: var(--color-text);
   font-size: var(--font-size-base);
   font-family: inherit;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .item-list__search-input:focus {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 1px;
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 20%, transparent);
 }
 
 .item-list__count {
@@ -237,9 +241,10 @@ function onKeydown(event: KeyboardEvent): void {
   display: flex;
   align-items: baseline;
   gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3);
   cursor: pointer;
   border-bottom: 1px solid var(--color-border);
+  transition: background-color 0.1s ease;
 }
 
 .item-list__option:last-child {
@@ -247,7 +252,7 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 .item-list__option--active {
-  background-color: var(--color-surface);
+  background-color: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
 }
 
 .item-list__code {

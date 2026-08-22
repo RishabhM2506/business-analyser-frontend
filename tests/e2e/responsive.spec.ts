@@ -42,6 +42,10 @@ test.describe('mobile viewport — no page-level horizontal scroll', () => {
 
     await page.goto('/')
     await page.getByRole('button', { name: 'Start my process' }).click()
+    // 2026-08-20 roadmap decision: "Start my process" now lands on the free-
+    // text search screen first — see landing.spec.ts/full-flow.spec.ts for
+    // the same fix's rationale.
+    await page.getByRole('link', { name: /browse by category instead/i }).click()
     await page.getByRole('combobox', { name: /search hs categories/i }).fill(E2E_CATEGORY_QUERY)
     await page.getByRole('option', { name: /Animals; live/i }).click()
     await expect(page).toHaveURL(/\/categories\/01\/items$/)
@@ -174,6 +178,10 @@ test.describe('a long unbroken word in analysis prose does not overflow the page
     await page.setViewportSize({ width: 1280, height: 900 })
     await page.goto('/')
     await page.getByRole('button', { name: 'Start my process' }).click()
+    // 2026-08-20 roadmap decision: "Start my process" now lands on the free-
+    // text search screen first — see landing.spec.ts/full-flow.spec.ts for
+    // the same fix's rationale.
+    await page.getByRole('link', { name: /browse by category instead/i }).click()
     await page.getByRole('combobox', { name: /search hs categories/i }).fill(E2E_CATEGORY_QUERY)
     await page.getByRole('option', { name: /Animals; live/i }).click()
     await expect(page).toHaveURL(/\/categories\/01\/items$/)
