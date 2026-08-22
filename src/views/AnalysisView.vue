@@ -102,17 +102,24 @@ watch(latestResult, (result) => {
     </EmptyState>
 
     <template v-else-if="latestResult">
-      <h1 ref="headingRef" class="view__title" tabindex="-1">
-        Trade analysis — HS {{ latestResult.hs_code }}
-      </h1>
+      <div class="view__heading-block">
+        <p class="view__eyebrow">HS {{ latestResult.hs_code }}</p>
+        <h1 ref="headingRef" class="view__title" tabindex="-1">Trade analysis</h1>
+      </div>
 
-      <AnalysisSummary
-        :item-description="latestResult.item_description"
-        :analytical-summary="latestResult.analytical_summary"
-      />
+      <section class="view__card">
+        <AnalysisSummary
+          :item-description="latestResult.item_description"
+          :analytical-summary="latestResult.analytical_summary"
+        />
+      </section>
 
-      <TradeTable title="Imports" :table="latestResult.imports" />
-      <TradeTable title="Exports" :table="latestResult.exports" />
+      <section class="view__card">
+        <TradeTable title="Imports" :table="latestResult.imports" />
+      </section>
+      <section class="view__card">
+        <TradeTable title="Exports" :table="latestResult.exports" />
+      </section>
 
       <ProvenanceFootnote :provenance="latestResult.provenance" />
     </template>
@@ -130,7 +137,7 @@ watch(latestResult, (result) => {
   gap: var(--space-6);
   max-width: 56rem;
   margin: 0 auto;
-  padding: var(--space-8) var(--space-4);
+  padding: var(--space-12) var(--space-4) var(--space-8);
 }
 
 .view__breadcrumb {
@@ -146,9 +153,35 @@ watch(latestResult, (result) => {
   color: var(--color-link);
 }
 
-.view__title {
-  font-size: var(--font-size-xl);
+.view__heading-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.view__eyebrow {
   margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.view__title {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-extrabold);
+  letter-spacing: var(--letter-spacing-tight);
+  margin: 0;
+}
+
+.view__card {
+  padding: var(--space-6);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 .view__error-note {

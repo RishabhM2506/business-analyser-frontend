@@ -10,9 +10,13 @@ test.describe('landing page', () => {
     await expect(page.getByRole('button', { name: 'Start my process' })).toBeVisible()
   })
 
-  test('clicking "Start my process" creates a thread and navigates to the category picker', async ({
+  test('clicking "Start my process" creates a thread and navigates to product search', async ({
     page,
   }) => {
+    // 2026-08-20 roadmap decision: free-text search is now the primary flow
+    // after "Start my process," not the category picker — see
+    // ProductSearchView.vue's own "Browse by category instead" link for how
+    // /categories stays reachable.
     await page.route('**/api/threads', async (route) => {
       expect(route.request().method()).toBe('POST')
       await route.fulfill({ json: { thread_id: E2E_THREAD_ID } })
@@ -20,6 +24,25 @@ test.describe('landing page', () => {
 
     await page.goto('/')
     await page.getByRole('button', { name: 'Start my process' }).click()
+
+    await expect(page).toHaveURL(/\/search$/)
+    await expect(
+      page.getByRole('heading', { name: 'What product are you analyzing?' }),
+    ).toBeVisible()
+  })
+
+  test('"Browse by category instead" from the search screen still reaches the category picker', async ({
+    page,
+  }) => {
+    await page.route('**/api/threads', async (route) => {
+      await route.fulfill({ json: { thread_id: E2E_THREAD_ID } })
+    })
+
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Start my process' }).click()
+    await expect(page).toHaveURL(/\/search$/)
+
+    await page.getByRole('link', { name: /browse by category instead/i }).click()
 
     await expect(page).toHaveURL(/\/categories$/)
     await expect(page.getByRole('heading', { name: 'Choose a category' })).toBeVisible()

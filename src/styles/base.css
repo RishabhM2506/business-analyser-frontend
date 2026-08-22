@@ -13,6 +13,8 @@ body {
   font-family: var(--font-family-base);
   font-size: var(--font-size-base);
   line-height: var(--line-height-base);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #app {
@@ -30,6 +32,21 @@ body {
  */
 a {
   color: var(--color-link);
+}
+
+/*
+ * Baseline focus ring for anything without its own explicit :focus/
+ * :focus-visible style (most visibly, router/index.ts's afterEach hook
+ * programmatically focusing each new view's <h1> on navigation — a real
+ * accessibility feature, M17/Frontend-QA#5, previously left to the
+ * browser's own default blue outline instead of this design system's own
+ * color). Components with a more specific focus treatment (inputs,
+ * AppButton, VirtualList rows) already override this via their own
+ * higher-specificity selectors.
+ */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /*

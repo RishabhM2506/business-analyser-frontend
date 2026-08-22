@@ -33,8 +33,17 @@ test.describe('focus management on route change (M17)', () => {
     await page.goto('/')
     await expect(page.getByRole('heading', { name: 'Business Analyser' })).toBeVisible()
 
-    // Landing -> Categories
+    // Landing -> Search (2026-08-20 roadmap decision: the new primary flow)
     await page.getByRole('button', { name: 'Start my process' }).click()
+    await expect(page).toHaveURL(/\/search$/)
+    await expect.poll(() => page.evaluate(() => document.activeElement?.tagName)).toBe('H1')
+    await expect
+      .poll(() => page.evaluate(() => document.activeElement?.textContent))
+      .toBe('What product are you analyzing?')
+    await expect(liveRegion).toHaveText(/search for a product/i)
+
+    // Search -> Categories (the "browse instead" fallback link)
+    await page.getByRole('link', { name: /browse by category instead/i }).click()
     await expect(page).toHaveURL(/\/categories$/)
     await expect.poll(() => page.evaluate(() => document.activeElement?.tagName)).toBe('H1')
     await expect

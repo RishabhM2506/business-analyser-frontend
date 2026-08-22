@@ -14,8 +14,10 @@ function onSelect(category: HsTaxonomyEntry): void {
 
 <template>
   <main class="view">
-    <h1 tabindex="-1">Choose a category</h1>
-    <p class="view__hint">Search by name (e.g. "food", "textiles") or by chapter number.</p>
+    <div class="view__intro">
+      <h1 tabindex="-1">Choose a category</h1>
+      <p class="view__hint">Search by name (e.g. "food", "textiles") or by chapter number.</p>
+    </div>
     <CategorySearch @select="onSelect" />
   </main>
 </template>
@@ -24,19 +26,28 @@ function onSelect(category: HsTaxonomyEntry): void {
 .view {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  max-width: 40rem;
+  gap: var(--space-6);
+  max-width: 42rem;
   margin: 0 auto;
-  padding: var(--space-8) var(--space-4);
+  padding: var(--space-12) var(--space-4) var(--space-8);
+}
+
+.view__intro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
 .view h1 {
-  font-size: var(--font-size-xl);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-extrabold);
+  letter-spacing: var(--letter-spacing-tight);
   margin: 0;
 }
 
 .view__hint {
   color: var(--color-text-muted);
+  font-size: var(--font-size-lg);
   margin: 0;
 }
 </style>
