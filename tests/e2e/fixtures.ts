@@ -3,6 +3,7 @@ import type {
   ProductSearchResponse,
   ResponseEnvelope,
   TradeAnalysisResponse,
+  TradeReportResponse,
 } from '../../src/types/generated'
 
 // Hand-written fixtures for mocking the backend in Playwright e2e tests (the
@@ -206,4 +207,108 @@ export const E2E_COFFEE_ANALYSIS_ENVELOPE: ResponseEnvelope = {
     hs_code: '090111',
     item_description: 'Coffee beans that have not been roasted or decaffeinated.',
   },
+}
+
+// POST /threads/{id}/trade-report fixture (2026-08-25 addition) — bare body,
+// not {type, data}-enveloped, same reasoning as the /search fixtures above.
+// Reuses E2E_ITEM_HS_CODE (010121, horses) so a spec can navigate there via
+// "View duty verification..." from an already-mocked /messages response
+// without needing a second, unrelated HS code.
+export const E2E_TRADE_REPORT_RESPONSE: TradeReportResponse = {
+  thread_id: E2E_THREAD_ID,
+  facts: {
+    hs6: E2E_ITEM_HS_CODE,
+    product_label: E2E_ITEM_DESCRIPTION,
+    flow: 'import',
+    window: { years: 5, start_year: 2021, end_year: 2025 },
+    top_n: 10,
+    annual_series: [],
+    month_wise_current_year: [],
+    unit_value_trend: [],
+    hhi_by_year: [],
+    landed_cost: {
+      is_complete: false,
+      landed_cost_inr_paise_per_kg: null,
+      partial_landed_cost_inr_paise_per_kg: 45000,
+      excluded_components: ['AIDC', 'SWS', 'IGST'],
+      components: {
+        BCD: {
+          component: 'BCD',
+          verification_status: 'VERIFIED',
+          value_pct: '30.000',
+          source_authority: 'ICEGATE Trade Guide on Imports',
+          source_reference: 'e2e fixture',
+          source_url: 'https://www.icegate.gov.in/Webappl/Desc_details?cth=01012100',
+          verified_date: '2026-08-24',
+          notes: null,
+          conflicting_candidates: null,
+        },
+        AIDC: {
+          component: 'AIDC',
+          verification_status: 'NOT_VERIFIED',
+          value_pct: null,
+          source_authority: null,
+          source_reference: null,
+          source_url: null,
+          verified_date: null,
+          notes: null,
+          conflicting_candidates: null,
+        },
+        SWS: {
+          component: 'SWS',
+          verification_status: 'NOT_VERIFIED',
+          value_pct: null,
+          source_authority: null,
+          source_reference: null,
+          source_url: null,
+          verified_date: null,
+          notes: null,
+          conflicting_candidates: null,
+        },
+        IGST: {
+          component: 'IGST',
+          verification_status: 'NOT_VERIFIED',
+          value_pct: null,
+          source_authority: null,
+          source_reference: null,
+          source_url: null,
+          verified_date: null,
+          notes: null,
+          conflicting_candidates: null,
+        },
+      },
+    },
+    landed_cost_as_of_period: '2025',
+    mismatch_checks: [],
+    regulatory_note: null,
+    regulatory_note_missing_warning: false,
+    coverage: null,
+    hs8_split_note: '',
+    mandi_price: {
+      status: 'NOT_APPLICABLE',
+      matched_commodity: null,
+      modal_price_inr_paise_per_qtl: null,
+      price_date: null,
+      market: null,
+      state: null,
+    },
+    msp: {
+      status: 'NOT_APPLICABLE',
+      matched_commodity: null,
+      year_label: null,
+      msp_inr_paise_per_qtl: null,
+      cost_inr_paise_per_qtl: null,
+    },
+    international_production: {
+      status: 'NOT_APPLICABLE',
+      matched_item: null,
+      year: null,
+      india_status: null,
+      india_production_tonnes: null,
+      world_production_tonnes: null,
+    },
+  },
+  narrative:
+    'Landed cost as of 2025 is incomplete (unverified: AIDC, SWS, IGST). Only BCD (30%) is confirmed.',
+  narrative_source: 'model',
 }
