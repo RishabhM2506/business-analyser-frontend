@@ -15,10 +15,18 @@ export interface TradeQuery {
   /** HS6 sub-heading. Backend-validated: pattern `^\d{6}$`, then checked against the taxonomy allowlist. */
   hs_code: string
   flow?: TradeFlow
-  /** `null`/omitted = latest available year - 4. */
+  /** `null`/omitted = latest available year - 4. Mutually exclusive with `years` (backend rejects both set). */
   year_start?: number | null
-  /** `null`/omitted = latest available year. */
+  /** `null`/omitted = latest available year. Mutually exclusive with `years`. */
   year_end?: number | null
+  /**
+   * Convenience alternative to year_start/year_end (2026-08-26 addition):
+   * "the last N years ending at the latest available year." 1–20.
+   * Omitted/undefined = backend's 5-year default.
+   */
+  years?: number
+  /** How many top trading partners to rank/return, 3–25. Omitted/undefined = backend default (10). */
+  top_n?: number
   /** Unused in v1 — reserved for a future roadmap filter (docs/PLAN.md §3.1). */
   partner_region?: string | null
   /** v1 supports `"value"` only; `"volume"` is reserved. */
@@ -207,4 +215,221 @@ export interface ProductSearchResponse {
   outcome: 'auto_selected' | 'disambiguate' | 'no_candidates_found'
   selected_hs_code: string | null
   candidates: RankedCandidateOut[]
+}
+
+// --- India trade-report pipeline (app/report/facts.py, app/report/landed_cost.py,
+// app/pipeline/duty_source.py) — POST /threads/{id}/trade-report. A separate,
+// additive capability from TradeAnalysisResponse's UN-Comtrade-only /messages
+// flow (2026-08-25 addition: duty verification, mandi price, MSP, and
+// international-production context, none of which the earlier flow renders).
+// Bare response, not `{type, data}`-enveloped, same reasoning as
+// ProductSearchResponse above.
+
+/** Mirrors `TradeReportQuery` (Pydantic, `app/schemas/query.py`). */
+export interface TradeReportQuery {
+  hs_code: string
+  flow?: 'import' | 'export'
+  years?: number
+  top_n?: number
+  tenant_id?: string
+  user_id?: string
+}
+
+/**
+ * Every value in Pydantic's `Decimal` fields serializes to a JSON *string*
+ * (confirmed against the real backend response), never a `number` — this
+ * alias exists purely to make that explicit at each call site below, since
+ * treating one as `number` would silently truncate/misparse the real value.
+ */
+export type DecimalString = string
+
+export type DutyComponent = 'BCD' | 'AIDC' | 'SWS' | 'IGST'
+export type DutyVerificationStatus = 'VERIFIED' | 'NOT_VERIFIED' | 'CONFLICTING' | 'EXPIRED'
+
+/** Mirrors `ConflictCandidate` (Pydantic, `app/pipeline/duty_source.py`). */
+export interface ConflictCandidate {
+  value_pct: DecimalString
+  source_authority: string
+  source_reference: string
+  source_url: string | null
+}
+
+/**
+ * Mirrors `DutyComponentEvidence` (Pydantic, `app/pipeline/duty_source.py`) —
+ * evidence-first by construction: `value_pct` is present if and only if
+ * `verification_status` is `VERIFIED` or `EXPIRED`. Never render a missing
+ * `value_pct` as 0%.
+ */
+export interface DutyComponentEvidence {
+  component: DutyComponent
+  verification_status: DutyVerificationStatus
+  value_pct: DecimalString | null
+  source_authority: string | null
+  source_reference: string | null
+  source_url: string | null
+  verified_date: string | null
+  notes: string | null
+  conflicting_candidates: ConflictCandidate[] | null
+}
+
+/**
+ * Mirrors `LandedCostResult` (Pydantic, `app/report/landed_cost.py`). Never
+ * present `partial_landed_cost_inr_paise_per_kg` as if it were the complete
+ * figure — check `is_complete` first; `landed_cost_inr_paise_per_kg` is the
+ * only field that is `null` unless every component is `VERIFIED`.
+ */
+export interface LandedCostResult {
+  is_complete: boolean
+  landed_cost_inr_paise_per_kg: number | null
+  partial_landed_cost_inr_paise_per_kg: number
+  excluded_components: DutyComponent[]
+  components: Partial<Record<DutyComponent, DutyComponentEvidence>>
+}
+
+/**
+ * Mirrors `MandiPriceFact` (Pydantic, `app/report/facts.py`). `NOT_FOUND`
+ * means Agmarknet is relevant to this commodity but no matching row exists
+ * yet; `NOT_APPLICABLE` means mandi prices are not a coherent concept for
+ * this commodity at all (e.g. an industrial good) — never render either as
+ * a bare "no data," the distinction is the point.
+ */
+export interface MandiPriceFact {
+  status: 'OK' | 'NOT_FOUND' | 'NOT_APPLICABLE'
+  matched_commodity: string | null
+  modal_price_inr_paise_per_qtl: number | null
+  price_date: string | null
+  market: string | null
+  state: string | null
+}
+
+/** Mirrors `MspFact` (Pydantic, `app/report/facts.py`) — same status semantics as `MandiPriceFact`. */
+export interface MspFact {
+  status: 'OK' | 'NOT_FOUND' | 'NOT_APPLICABLE'
+  matched_commodity: string | null
+  year_label: string | null
+  msp_inr_paise_per_qtl: number | null
+  cost_inr_paise_per_qtl: number | null
+}
+
+/**
+ * Mirrors `InternationalProductionFact` (Pydantic, `app/report/facts.py`).
+ * `india_status`/`india_production_tonnes` are independent of `status`: a
+ * real matched FAOSTAT item (`status: 'OK'`) can still have
+ * `india_status: 'NOT_FOUND'` (FAOSTAT's own real "missing value" flag) —
+ * never conflate the two into one figure.
+ */
+export interface InternationalProductionFact {
+  status: 'OK' | 'NOT_FOUND' | 'NOT_APPLICABLE'
+  matched_item: string | null
+  year: number | null
+  india_status: 'OK' | 'NOT_FOUND' | null
+  india_production_tonnes: DecimalString | null
+  world_production_tonnes: DecimalString | null
+}
+
+/** Mirrors `Window` (Pydantic, `app/report/facts.py`). */
+export interface ReportWindow {
+  years: number
+  start_year: number
+  end_year: number
+}
+
+/** Mirrors `PartnerFact` (Pydantic, `app/report/facts.py`). */
+export interface ReportPartnerFact {
+  rank: number
+  country: string
+  value_inr_paise: number
+  status: string
+}
+
+/** Mirrors `AllOtherPartnersFact` (Pydantic, `app/report/facts.py`). */
+export interface AllOtherPartnersFact {
+  value_inr_paise: number
+  status: string
+}
+
+/** Mirrors `AnnualSeriesYear` (Pydantic, `app/report/facts.py`). */
+export interface AnnualSeriesYear {
+  year: number
+  flow: string
+  total_inr_paise: number | null
+  status: string
+  partners: ReportPartnerFact[]
+  all_other_partners: AllOtherPartnersFact
+}
+
+/** Mirrors `UnitValueTrendYear` (Pydantic, `app/report/facts.py`). */
+export interface UnitValueTrendYear {
+  year: number
+  inr_paise_per_kg: DecimalString | null
+  delta_qty_pct: DecimalString | null
+  delta_price_pct: DecimalString | null
+  delta_fx_pct: DecimalString | null
+}
+
+/** Mirrors `HhiYear` (Pydantic, `app/report/facts.py`). */
+export interface HhiYear {
+  year: number
+  hhi: DecimalString | null
+}
+
+/** Mirrors `MismatchCheckFact` (Pydantic, `app/report/facts.py`). */
+export interface MismatchCheckFact {
+  check: string
+  year: number
+  partner: string
+  gap_pct: DecimalString
+  severity: string
+}
+
+/** Mirrors `CoverageFact` (Pydantic, `app/report/facts.py`). */
+export interface CoverageFact {
+  expected_cells: number
+  present_cells: number
+  not_yet_published: number
+  suppressed: number
+  fetch_failed: number
+  degraded: boolean
+}
+
+/**
+ * Mirrors `Facts` (Pydantic, `app/report/facts.py`) — the complete frozen
+ * contract document every numeral in `narrative` traces back to. This
+ * repo's own `AnalysisView`/`TradeTable` already render `annual_series` in a
+ * different shape (via `TradeAnalysisResponse`); `TradeReportView` focuses
+ * on the fields nothing else renders yet (duty verification, mandi price,
+ * MSP, international production, narrative) rather than duplicating that
+ * existing table.
+ */
+export interface Facts {
+  hs6: string
+  product_label: string
+  flow: string
+  window: ReportWindow
+  top_n: number
+  annual_series: AnnualSeriesYear[]
+  month_wise_current_year: unknown[]
+  unit_value_trend: UnitValueTrendYear[]
+  hhi_by_year: HhiYear[]
+  landed_cost: LandedCostResult | null
+  landed_cost_as_of_period: string | null
+  mismatch_checks: MismatchCheckFact[]
+  regulatory_note: string | null
+  regulatory_note_missing_warning: boolean
+  coverage: CoverageFact | null
+  hs8_split_note: string
+  mandi_price: MandiPriceFact
+  msp: MspFact
+  international_production: InternationalProductionFact
+}
+
+/**
+ * Mirrors `TradeReportResponse` (Pydantic, `app/schemas/response.py`) — the
+ * success shape of `POST /threads/{id}/trade-report`.
+ */
+export interface TradeReportResponse {
+  thread_id: string
+  facts: Facts
+  narrative: string
+  narrative_source: 'model' | 'model_retry' | 'template_fallback'
 }

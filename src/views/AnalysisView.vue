@@ -8,6 +8,7 @@ import TradeTable from '@/components/analysis/TradeTable.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import ErrorState from '@/components/common/ErrorState.vue'
 import LoadingState from '@/components/common/LoadingState.vue'
+import QueryControls from '@/components/common/QueryControls.vue'
 import { ROUTE_NAMES } from '@/constants/routes'
 import { useThreadStore } from '@/stores/thread'
 
@@ -16,10 +17,21 @@ const props = defineProps<{ hsCode: string }>()
 const store = useThreadStore()
 const { messages, loading, error } = storeToRefs(store)
 
+// `null` = let the backend apply its own default (TradeQuery.years/top_n,
+// app/schemas/query.py) — never guessed at client-side. Component-local UI
+// state, not store state: it's this view's own control surface, not
+// something any other view needs to read.
+const years = ref<number | null>(null)
+const topN = ref<number | null>(null)
+
 // POST /threads/{id}/messages (docs/PLAN.md §3.3) on item selection —
 // re-fires if the route's hsCode ever changes under this same mounted view.
 function runQuery(): void {
-  void store.submitQuery({ hs_code: props.hsCode })
+  void store.submitQuery({
+    hs_code: props.hsCode,
+    years: years.value ?? undefined,
+    top_n: topN.value ?? undefined,
+  })
 }
 
 onMounted(runQuery)
@@ -108,6 +120,17 @@ watch(latestResult, (result) => {
       </div>
 
       <section class="view__card">
+        <h2 class="view__section-title">Query settings</h2>
+        <QueryControls
+          v-model:years="years"
+          v-model:top-n="topN"
+          :max-years="20"
+          :disabled="loading"
+          @apply="runQuery"
+        />
+      </section>
+
+      <section class="view__card">
         <AnalysisSummary
           :item-description="latestResult.item_description"
           :analytical-summary="latestResult.analytical_summary"
@@ -122,6 +145,12 @@ watch(latestResult, (result) => {
       </section>
 
       <ProvenanceFootnote :provenance="latestResult.provenance" />
+
+      <p class="view__trade-report-link">
+        <RouterLink :to="{ name: ROUTE_NAMES.TRADE_REPORT, params: { hsCode: props.hsCode } }">
+          View duty verification, mandi price &amp; MSP, and international context →
+        </RouterLink>
+      </p>
     </template>
 
     <!-- Covers the brief pre-mount tick before onMounted's query has set
@@ -184,8 +213,25 @@ watch(latestResult, (result) => {
   box-shadow: var(--shadow-sm);
 }
 
+.view__section-title {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
 .view__error-note {
   margin: 0;
   font-size: var(--font-size-sm);
+}
+
+.view__trade-report-link {
+  margin: 0;
+  text-align: center;
+  font-size: var(--font-size-sm);
+}
+
+.view__trade-report-link a {
+  color: var(--color-link);
+  font-weight: var(--font-weight-semibold);
 }
 </style>

@@ -19,6 +19,11 @@ vi.mock('@/services/api', async (importOriginal) => {
 
 const mockedApiRequest = vi.mocked(apiRequest)
 
+function required<T>(value: T | undefined, message: string): T {
+  if (value === undefined) throw new Error(message)
+  return value
+}
+
 function makeRouter(): Router {
   return createRouter({
     history: createMemoryHistory(),
@@ -32,6 +37,12 @@ function makeRouter(): Router {
         path: ROUTE_PATHS[ROUTE_NAMES.ANALYSIS],
         name: ROUTE_NAMES.ANALYSIS,
         component: AnalysisView,
+        props: true,
+      },
+      {
+        path: ROUTE_PATHS[ROUTE_NAMES.TRADE_REPORT],
+        name: ROUTE_NAMES.TRADE_REPORT,
+        component: { template: '<div>trade report</div>' },
         props: true,
       },
     ],
@@ -77,6 +88,33 @@ describe('AnalysisView', () => {
     expect(wrapper.text()).toContain('$2,505,000.00')
     expect(wrapper.text()).toContain('UN Comtrade (comtradeapi.un.org)')
     expect(mockedApiRequest).toHaveBeenCalledTimes(2)
+  })
+
+  it('sends no years/top_n by default, then re-queries with the user-chosen values on Apply', async () => {
+    mockedApiRequest.mockResolvedValueOnce({ thread_id: 't1' })
+    mockedApiRequest.mockResolvedValueOnce({ type: 'final', data: FIXTURE_TRADE_ANALYSIS_RESPONSE })
+    const { wrapper } = await mountAnalysisView('010121')
+    await flushPromises()
+
+    // Second call is the /messages POST; its body must omit years/top_n
+    // entirely so the backend applies its own default (never guessed
+    // client-side) — regression for the "application end to end is not
+    // working" years/top-N configurability gap.
+    const firstQueryBody = mockedApiRequest.mock.calls[1]?.[1]?.body as Record<string, unknown>
+    expect(firstQueryBody.years).toBeUndefined()
+    expect(firstQueryBody.top_n).toBeUndefined()
+
+    const numberInputs = wrapper.findAll('input[type="number"]')
+    await required(numberInputs[0], 'expected a years input').setValue('3')
+    await required(numberInputs[1], 'expected a top_n input').setValue('15')
+
+    mockedApiRequest.mockResolvedValueOnce({ type: 'final', data: FIXTURE_TRADE_ANALYSIS_RESPONSE })
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    const secondQueryBody = mockedApiRequest.mock.calls[2]?.[1]?.body as Record<string, unknown>
+    expect(secondQueryBody.years).toBe(3)
+    expect(secondQueryBody.top_n).toBe(15)
   })
 
   it('shows an actionable error state (not a blank screen or raw error) on upstream timeout, offering retry', async () => {
