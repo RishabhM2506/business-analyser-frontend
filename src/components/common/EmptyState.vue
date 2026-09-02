@@ -18,6 +18,9 @@ withDefaults(defineProps<{ message?: string }>(), {
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-8);
+  background-color: var(--color-surface);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-lg);
   color: var(--color-text-muted);
   text-align: center;
 }

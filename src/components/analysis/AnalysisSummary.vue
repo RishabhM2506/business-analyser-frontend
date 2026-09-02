@@ -45,8 +45,8 @@ const summaryParagraphs = computed(() => splitParagraphs(props.analyticalSummary
 
 .analysis-summary__heading {
   margin: 0;
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
 }
 
 .analysis-summary__block p {

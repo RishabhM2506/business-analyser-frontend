@@ -33,6 +33,12 @@ test.describe('full analysis flow', () => {
 
     await page.goto('/')
     await page.getByRole('button', { name: 'Start my process' }).click()
+    // 2026-08-20 roadmap decision: "Start my process" now lands on the new
+    // free-text search screen first — this spec exercises the category/item
+    // browse path specifically, so it follows the "Browse by category
+    // instead" link straight through, same as a real user choosing that path.
+    await expect(page).toHaveURL(/\/search$/)
+    await page.getByRole('link', { name: /browse by category instead/i }).click()
     await expect(page).toHaveURL(/\/categories$/)
 
     const searchInput = page.getByRole('combobox', { name: /search hs categories/i })
@@ -92,6 +98,9 @@ test.describe('full analysis flow', () => {
 
     await page.goto('/')
     await page.getByRole('button', { name: 'Start my process' }).click()
+    await expect(page).toHaveURL(/\/search$/)
+    await page.getByRole('link', { name: /browse by category instead/i }).click()
+    await expect(page).toHaveURL(/\/categories$/)
     await page.getByRole('combobox', { name: /search hs categories/i }).fill(E2E_CATEGORY_QUERY)
     await page.getByRole('option', { name: /Animals; live/i }).click()
     await expect(page).toHaveURL(/\/categories\/01\/items$/)

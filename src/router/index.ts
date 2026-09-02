@@ -28,6 +28,17 @@ const router = createRouter({
       component: () => import('@/views/AnalysisView.vue'),
       props: true,
     },
+    {
+      path: ROUTE_PATHS[ROUTE_NAMES.PRODUCT_SEARCH],
+      name: ROUTE_NAMES.PRODUCT_SEARCH,
+      component: () => import('@/views/ProductSearchView.vue'),
+    },
+    {
+      path: ROUTE_PATHS[ROUTE_NAMES.TRADE_REPORT],
+      name: ROUTE_NAMES.TRADE_REPORT,
+      component: () => import('@/views/TradeReportView.vue'),
+      props: true,
+    },
     { path: '/:pathMatch(.*)*', redirect: { name: ROUTE_NAMES.LANDING } },
   ],
 })
@@ -47,6 +58,8 @@ const ROUTE_TITLES: Partial<Record<string, string>> = {
   [ROUTE_NAMES.HS_CATEGORY]: 'Choose a category',
   [ROUTE_NAMES.HS_ITEM]: 'Choose an item',
   [ROUTE_NAMES.ANALYSIS]: 'Trade analysis',
+  [ROUTE_NAMES.PRODUCT_SEARCH]: 'Search for a product',
+  [ROUTE_NAMES.TRADE_REPORT]: 'Product intelligence',
 }
 
 /**

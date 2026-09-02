@@ -30,8 +30,10 @@ function onSelect(item: HsTaxonomyEntry): void {
     <p class="view__breadcrumb">
       <RouterLink :to="{ name: ROUTE_NAMES.HS_CATEGORY }">← Back to categories</RouterLink>
     </p>
-    <h1 tabindex="-1">{{ category ? category.description : `Category ${categoryCode}` }}</h1>
-    <p class="view__hint">Select an item to see its 5-year import/export analysis.</p>
+    <div class="view__intro">
+      <h1 tabindex="-1">{{ category ? category.description : `Category ${categoryCode}` }}</h1>
+      <p class="view__hint">Select an item to see its 5-year import/export analysis.</p>
+    </div>
     <ItemList :category-code="categoryCode" @select="onSelect" />
   </main>
 </template>
@@ -41,9 +43,9 @@ function onSelect(item: HsTaxonomyEntry): void {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  max-width: 40rem;
+  max-width: 42rem;
   margin: 0 auto;
-  padding: var(--space-8) var(--space-4);
+  padding: var(--space-12) var(--space-4) var(--space-8);
 }
 
 .view__breadcrumb {
@@ -57,15 +59,26 @@ function onSelect(item: HsTaxonomyEntry): void {
    * a lighter dark-mode value than --color-primary's background-under-
    * white-text use can share. */
   color: var(--color-link);
+  font-weight: var(--font-weight-semibold);
+}
+
+.view__intro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 
 .view h1 {
-  font-size: var(--font-size-xl);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-extrabold);
+  letter-spacing: var(--letter-spacing-tight);
   margin: 0;
 }
 
 .view__hint {
   color: var(--color-text-muted);
+  font-size: var(--font-size-lg);
   margin: 0;
 }
 </style>

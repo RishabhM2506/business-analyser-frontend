@@ -29,9 +29,22 @@ const sortedRows = computed<CountryRow[]>(() =>
 // "provisional" here iff it's neither finalized nor no-data.
 const noDataYears = computed(() => props.table.years_no_data ?? [])
 
+// 2026-08-20 roadmap decision (live user-reported finding): a year whose
+// Comtrade *fetch itself* failed after every retry attempt is a third,
+// distinct case from both `years_finalized`'s complement and
+// `years_no_data` — we don't actually know whether real data exists for
+// it, only that we couldn't retrieve it just now. Excluded from
+// `provisionalYears` below for the same reason `years_no_data` already is:
+// "provisional — check back later" is honest advice for genuinely
+// still-settling data, not for a fetch failure.
+const fetchIssueYears = computed(() => props.table.fetch_issue_years ?? [])
+
 const provisionalYears = computed(() =>
   props.table.years.filter(
-    (year) => !props.table.years_finalized.includes(year) && !noDataYears.value.includes(year),
+    (year) =>
+      !props.table.years_finalized.includes(year) &&
+      !noDataYears.value.includes(year) &&
+      !fetchIssueYears.value.includes(year),
   ),
 )
 
@@ -43,8 +56,12 @@ function isNoData(year: number): boolean {
   return noDataYears.value.includes(year)
 }
 
+function isFetchIssue(year: number): boolean {
+  return fetchIssueYears.value.includes(year)
+}
+
 function isProvisional(year: number): boolean {
-  return !isFinalized(year) && !isNoData(year)
+  return !isFinalized(year) && !isNoData(year) && !isFetchIssue(year)
 }
 
 // Phase 4 finding M23/PBO-05: the "—" marker is mechanically correct (a
@@ -91,8 +108,12 @@ const hasMissingData = computed(() =>
               <th v-for="year in table.years" :key="year" scope="col" class="trade-table__value">
                 {{ year }}<sup v-if="isProvisional(year)" aria-hidden="true">*</sup>
                 <sup v-if="isNoData(year)" aria-hidden="true">&dagger;</sup>
+                <sup v-if="isFetchIssue(year)" aria-hidden="true">&Dagger;</sup>
                 <span v-if="isProvisional(year)" class="visually-hidden">(provisional)</span>
                 <span v-if="isNoData(year)" class="visually-hidden">(no data recorded)</span>
+                <span v-if="isFetchIssue(year)" class="visually-hidden"
+                  >(could not be retrieved)</span
+                >
               </th>
               <th scope="col" class="trade-table__value">5-yr total</th>
             </tr>
@@ -124,6 +145,15 @@ const hasMissingData = computed(() =>
         "—" means no figure was reported for that country and year — it does not mean zero trade
         occurred.
       </p>
+      <template v-if="(table.fetch_issues?.length ?? 0) > 0">
+        <p class="trade-table__footnote trade-table__footnote--issue">
+          &Dagger; Could not be retrieved right now — this doesn't mean the data doesn't exist, only
+          that this attempt didn't succeed:
+        </p>
+        <ul class="trade-table__footnote trade-table__footnote--issue trade-table__issue-list">
+          <li v-for="issue in table.fetch_issues" :key="issue">{{ issue }}</li>
+        </ul>
+      </template>
       <p v-if="table.excluded_partner_codes.length > 0" class="trade-table__footnote">
         Aggregate/unspecified partner codes excluded before ranking:
         {{ table.excluded_partner_codes.join(', ') }}.
@@ -142,6 +172,7 @@ const hasMissingData = computed(() =>
 .trade-table__title {
   margin: 0;
   font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
 }
 
 .trade-table__empty {
@@ -201,6 +232,14 @@ const hasMissingData = computed(() =>
   font-weight: var(--font-weight-semibold);
 }
 
+.trade-table__table tbody tr {
+  transition: background-color 0.1s ease;
+}
+
+.trade-table__table tbody tr:hover {
+  background-color: var(--color-surface);
+}
+
 .trade-table__table tbody tr:last-child td {
   border-bottom: none;
 }
@@ -214,5 +253,18 @@ const hasMissingData = computed(() =>
   margin: 0;
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
+}
+
+.trade-table__footnote--issue:first-of-type {
+  margin-top: var(--space-2);
+}
+
+.trade-table__issue-list {
+  margin: 0;
+  padding-left: var(--space-4);
+}
+
+.trade-table__issue-list li {
+  margin: 0;
 }
 </style>

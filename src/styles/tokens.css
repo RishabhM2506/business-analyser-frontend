@@ -13,9 +13,24 @@
   --color-text-muted: #64748b;
 
   /* Color — brand / semantic */
-  --color-primary: #1d4ed8;
-  --color-primary-hover: #1e40af;
+  /*
+   * 2026-08-20 design pass: shifted from a generic blue (#1d4ed8) to indigo,
+   * a more distinctive "product," not "default browser link," hue.
+   * --color-primary/-hover are used only as backgrounds (buttons) or
+   * decorative accents (focus rings, spinners) — never as text on the page
+   * background — so they're free to change without touching the two tokens
+   * the real WCAG AA contrast test (tests/e2e/dark-mode.spec.ts) computes
+   * live from the rendered DOM (--color-link, --color-danger/-bg, both
+   * unchanged below). White-on-#4f46e5 verified ≥4.5:1 (6.3:1 computed) for
+   * AppButton's primary variant.
+   */
+  --color-primary: #4f46e5;
+  --color-primary-hover: #4338ca;
   --color-primary-contrast: #ffffff;
+  /* Secondary brand accent — gradients/decorative emphasis only (e.g. the
+   * landing hero's headline treatment), never relied on alone for meaning
+   * or required for contrast. */
+  --color-accent: #7c3aed;
   /*
    * A separate token from --color-primary, deliberately (Phase 4 finding
    * M16/Frontend-QA#4): --color-primary is also used as a *background* with
@@ -23,8 +38,8 @@
    * enough to pass 4.5:1 as *text on the dark page background* would fail
    * 4.5:1 as a *background under white text* (a lighter blue button reads
    * clearly worse, computed: white-on-#60a5fa is only 2.54:1). The two roles
-   * can't share one dark-mode value. Same value as --color-primary in light
-   * mode (identical visual result today), independently overridden below.
+   * can't share one dark-mode value. Same value as the pre-2026-08-20
+   * --color-primary in light mode, independently overridden below.
    */
   --color-link: #1d4ed8;
   --color-danger: #b91c1c;
@@ -38,6 +53,8 @@
   --space-4: 1rem;
   --space-6: 1.5rem;
   --space-8: 2rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
 
   /* Typography */
   --font-family-base: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -45,14 +62,24 @@
   --font-size-base: 1rem;
   --font-size-lg: 1.25rem;
   --font-size-xl: 1.75rem;
+  --font-size-2xl: 2.25rem;
+  --font-size-3xl: 3rem;
   --font-weight-normal: 400;
   --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-extrabold: 800;
   --line-height-base: 1.5;
+  --line-height-tight: 1.15;
+  --letter-spacing-tight: -0.02em;
 
   /* Radius / elevation */
   --radius-sm: 0.25rem;
   --radius-md: 0.5rem;
+  --radius-lg: 1rem;
+  --radius-full: 999px;
   --shadow-sm: 0 1px 2px rgb(15 23 42 / 8%);
+  --shadow-md: 0 4px 12px rgb(15 23 42 / 8%), 0 1px 2px rgb(15 23 42 / 6%);
+  --shadow-lg: 0 16px 40px rgb(15 23 42 / 14%), 0 2px 8px rgb(15 23 42 / 8%);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -78,5 +105,21 @@
      */
     --color-danger: #f87171;
     --color-link: #60a5fa;
+    /* --color-primary/-hover intentionally NOT overridden here (matches the
+     * pre-2026-08-20 app's own choice): #4f46e5 already computes 6.3:1 for
+     * white text against it, comfortably ≥4.5:1, and reads fine as a
+     * background on a dark page too — a lighter dark-mode indigo (tried
+     * #6366f1) came out to only 4.46:1 for that same white-text pairing,
+     * uncomfortably close to the AA floor for no real visual gain. Only the
+     * purely-decorative accent gets a dark-mode-specific value. */
+    --color-accent: #a78bfa;
+    /* Flat drop-shadows barely read against a dark background — depth here
+     * comes from --color-surface's own lightness step instead, so these
+     * shadows are kept subtle rather than removed (still useful on light
+     * surfaces layered within a dark page, e.g. a white card if one is ever
+     * used, and cheap to keep rather than fork every card's box-shadow per
+     * theme). */
+    --shadow-md: 0 4px 16px rgb(0 0 0 / 30%), 0 1px 2px rgb(0 0 0 / 24%);
+    --shadow-lg: 0 20px 48px rgb(0 0 0 / 40%), 0 2px 8px rgb(0 0 0 / 28%);
   }
 }
