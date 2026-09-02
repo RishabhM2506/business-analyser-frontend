@@ -4,6 +4,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 
 import AnalysisSummary from '@/components/analysis/AnalysisSummary.vue'
 import ProvenanceFootnote from '@/components/analysis/ProvenanceFootnote.vue'
+import TradeBalanceSummary from '@/components/analysis/TradeBalanceSummary.vue'
 import TradeTable from '@/components/analysis/TradeTable.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import ErrorState from '@/components/common/ErrorState.vue'
@@ -142,6 +143,12 @@ watch(latestResult, (result) => {
       </section>
       <section class="view__card">
         <TradeTable title="Exports" :table="latestResult.exports" />
+      </section>
+      <section class="view__card">
+        <TradeBalanceSummary
+          :trade-balance="latestResult.trade_balance"
+          :years="latestResult.imports.years"
+        />
       </section>
 
       <ProvenanceFootnote :provenance="latestResult.provenance" />

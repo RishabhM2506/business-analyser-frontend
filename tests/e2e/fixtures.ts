@@ -98,6 +98,16 @@ const E2E_ANALYSIS_DATA: TradeAnalysisResponse = {
       },
     ],
   },
+  trade_balance: {
+    by_year: {
+      '2021': -400_000,
+      '2022': -410_000,
+      '2023': null, // imports' own world total is unknown for 2023 in this fixture
+      '2024': -380_000,
+      '2025': -355_000,
+    },
+    cumulative: -1_545_000,
+  },
   analytical_summary:
     'Imports were led by the United States, though 2023 data was not reported.\n\nExports were concentrated in Canada, growing steadily over the period.',
   provenance: {
@@ -228,6 +238,10 @@ export const E2E_TRADE_REPORT_RESPONSE: TradeReportResponse = {
     month_wise_current_year: [],
     unit_value_trend: [],
     hhi_by_year: [],
+    overall_cagr: null,
+    overall_volatility: null,
+    cagr_by_partner: {},
+    volatility_by_partner: {},
     landed_cost: {
       is_complete: false,
       landed_cost_inr_paise_per_kg: null,
@@ -309,6 +323,10 @@ export const E2E_TRADE_REPORT_RESPONSE: TradeReportResponse = {
       india_production_tonnes: null,
       world_production_tonnes: null,
     },
+    llm_datapoints: [],
+    mandi_price_llm_datapoints: [],
+    msp_llm_datapoints: [],
+    international_production_llm_datapoints: [],
   },
   narrative:
     'Landed cost as of 2025 is incomplete (unverified: AIDC, SWS, IGST). Only BCD (30%) is confirmed.',

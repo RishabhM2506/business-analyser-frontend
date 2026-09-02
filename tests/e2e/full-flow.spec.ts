@@ -71,10 +71,16 @@ test.describe('full analysis flow', () => {
     await expect(page.getByRole('heading', { name: 'Exports' })).toBeVisible()
     await expect(page.getByText('$2,025,000.00')).toBeVisible() // US cumulative_5yr, imports
 
-    // Missing data (2023 for the US row) must render as the dash marker, never blank.
+    // Missing data (2023 for the US row) must render as the dash marker, never
+    // blank. Scoped to `td` and the specific 2023 column position (not just
+    // "any dash in the row") — the newer CAGR/Volatility columns can also
+    // legitimately show a dash for a value this older fixture doesn't set,
+    // which would otherwise make a same-row, any-cell match ambiguous.
     const importsTable = page.locator('table').filter({ hasText: 'United States' })
     const usRow = importsTable.locator('tr').filter({ hasText: 'United States' })
-    await expect(usRow.getByText('—', { exact: true })).toBeVisible()
+    const usCells = usRow.locator('td')
+    // Columns: rank, country, 2021, 2022, 2023, 2024, 2025, 5-yr total, ...
+    await expect(usCells.nth(4)).toHaveText('—')
 
     // Provenance: source, currency, and the explicit calendar-year-vs-fiscal-year note.
     await expect(page.getByText('UN Comtrade (comtradeapi.un.org)')).toBeVisible()
