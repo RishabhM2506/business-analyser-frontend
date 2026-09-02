@@ -4,7 +4,7 @@
 // category/item picker at /categories, which stays reachable here as a
 // browse-first fallback and is where `no_candidates_found` points back to.
 import { storeToRefs } from 'pinia'
-import { computed, useId } from 'vue'
+import { computed, nextTick, ref, useId } from 'vue'
 import { useRouter } from 'vue-router'
 
 import AppButton from '@/components/common/AppButton.vue'
@@ -22,6 +22,7 @@ const { queryText, result, loading, error } = storeToRefs(searchStore)
 
 const inputId = useId()
 const statusId = useId()
+const inputRef = ref<HTMLInputElement | null>(null)
 
 const outcome = computed(() => result.value?.outcome ?? null)
 const candidates = computed<RankedCandidateOut[]>(() => result.value?.candidates ?? [])
@@ -49,13 +50,23 @@ async function onSubmit(): Promise<void> {
     return
   }
   await searchStore.runSearch(text)
-  if (searchStore.result?.outcome === 'auto_selected' && searchStore.result.selected_hs_code) {
-    goToAnalysis(searchStore.result.selected_hs_code)
-  }
 }
 
 function onSelectCandidate(candidate: RankedCandidateOut): void {
   goToAnalysis(candidate.hs_code)
+}
+
+// "Something else" (ProductSearchResults.vue's always-present extra
+// option, 2026-09-02 product decision): the user rejects every shown
+// candidate outright. Clears the search back to a blank slate — never
+// navigates anywhere, this is purely "let me try describing it again" —
+// and moves focus straight back into the input so redescribing is a
+// single, uninterrupted action rather than a search-results screen the
+// user has to first tab or click away from.
+async function onOther(): Promise<void> {
+  searchStore.reset()
+  await nextTick()
+  inputRef.value?.focus()
 }
 </script>
 
@@ -75,6 +86,7 @@ function onSelectCandidate(candidate: RankedCandidateOut): void {
           Product description
           <input
             :id="inputId"
+            ref="inputRef"
             v-model="queryText"
             type="text"
             autocomplete="off"
@@ -105,6 +117,7 @@ function onSelectCandidate(candidate: RankedCandidateOut): void {
       v-else-if="outcome === 'disambiguate'"
       :candidates="candidates"
       @select="onSelectCandidate"
+      @other="onOther"
     />
     <EmptyState
       v-else-if="outcome === 'no_candidates_found'"

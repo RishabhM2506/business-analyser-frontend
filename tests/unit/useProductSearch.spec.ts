@@ -15,7 +15,6 @@ const FIXTURE_RESPONSE = {
   thread_id: 'thread-abc',
   query_text: 'coffee',
   outcome: 'disambiguate' as const,
-  selected_hs_code: null,
   candidates: [
     { hs_code: '090111', description: 'Coffee, not roasted', relevance_score: 0.6 },
     { hs_code: '090121', description: 'Coffee, roasted', relevance_score: 0.5 },

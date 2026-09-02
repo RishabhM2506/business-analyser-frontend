@@ -158,7 +158,6 @@ export const E2E_SEARCH_DISAMBIGUATE_RESPONSE: ProductSearchResponse = {
   thread_id: E2E_THREAD_ID,
   query_text: 'coffee',
   outcome: 'disambiguate',
-  selected_hs_code: null,
   candidates: [
     {
       hs_code: '090111',
@@ -170,11 +169,15 @@ export const E2E_SEARCH_DISAMBIGUATE_RESPONSE: ProductSearchResponse = {
   ],
 }
 
-export const E2E_SEARCH_AUTO_SELECTED_RESPONSE: ProductSearchResponse = {
+// A high-confidence match (2026-09-02 product decision: even this still
+// goes through the disambiguation picker — auto-selecting on the user's
+// behalf was removed entirely, see ProductSearchResults.vue's own doc
+// comment). Only one real candidate, so the picker shows it plus the
+// always-present "Something else" option.
+export const E2E_SEARCH_HIGH_CONFIDENCE_RESPONSE: ProductSearchResponse = {
   thread_id: E2E_THREAD_ID,
   query_text: 'green coffee beans',
-  outcome: 'auto_selected',
-  selected_hs_code: '090111',
+  outcome: 'disambiguate',
   candidates: [
     {
       hs_code: '090111',
@@ -188,7 +191,6 @@ export const E2E_SEARCH_NO_CANDIDATES_RESPONSE: ProductSearchResponse = {
   thread_id: E2E_THREAD_ID,
   query_text: 'zzzqqqxxx nonsense gibberish',
   outcome: 'no_candidates_found',
-  selected_hs_code: null,
   candidates: [],
 }
 

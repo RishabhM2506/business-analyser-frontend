@@ -19,13 +19,14 @@ function mountResults(candidates: RankedCandidateOut[] = CANDIDATES) {
 }
 
 describe('ProductSearchResults', () => {
-  it('renders one option per candidate, with code and description', () => {
+  it('renders one option per candidate, plus a trailing "Something else" option, with code and description', () => {
     const wrapper = mountResults()
     const options = wrapper.findAll('[role="option"]')
 
-    expect(options).toHaveLength(3)
+    expect(options).toHaveLength(4) // 3 candidates + "Something else"
     expect(options[0]?.text()).toContain('090111')
     expect(options[0]?.text()).toContain('Coffee, not roasted, not decaffeinated')
+    expect(options[3]?.text()).toContain('Something else')
   })
 
   it("renders each candidate's confidence as a rounded percentage", () => {
@@ -84,12 +85,51 @@ describe('ProductSearchResults', () => {
     })
 
     const options = wrapper.findAll('[role="option"]')
-    expect(options).toHaveLength(1)
+    expect(options).toHaveLength(2) // 1 candidate + "Something else"
     expect(options[0]?.attributes('aria-selected')).toBe('false')
   })
 
-  it('renders no options for an empty candidate list', () => {
+  it('renders only the "Something else" option for an empty candidate list', () => {
     const wrapper = mountResults([])
-    expect(wrapper.findAll('[role="option"]')).toHaveLength(0)
+    const options = wrapper.findAll('[role="option"]')
+    expect(options).toHaveLength(1)
+    expect(options[0]?.text()).toContain('Something else')
+  })
+
+  it('clicking "Something else" emits "other", not "select"', async () => {
+    const wrapper = mountResults()
+    const options = wrapper.findAll('[role="option"]')
+    // Distinct coordinates from the "clicking an option" test above, which
+    // also fires a bare (0,0) click in this same test file — the shared
+    // double-click navigation guard (router.ts's module-level
+    // `navigationLock`, 400ms/40px) would otherwise mistake these two
+    // separate tests' clicks for one rapid double-click.
+    await options[3]?.trigger('click', { clientX: 999, clientY: 999 }) // the trailing "Something else" row
+
+    expect(wrapper.emitted('other')).toHaveLength(1)
+    expect(wrapper.emitted('select')).toBeUndefined()
+  })
+
+  it('arrow-key navigation reaches "Something else" as the final item in the same listbox', async () => {
+    const wrapper = mountResults()
+    const listbox = wrapper.find('[role="listbox"]')
+    for (let i = 0; i < 4; i += 1) {
+      await listbox.trigger('keydown', { key: 'ArrowDown' })
+    }
+
+    const options = wrapper.findAll('[role="option"]')
+    expect(options[3]?.attributes('aria-selected')).toBe('true')
+    expect(listbox.attributes('aria-activedescendant')).toBe(options[3]?.attributes('id'))
+  })
+
+  it('Enter on the highlighted "Something else" option emits "other"', async () => {
+    const wrapper = mountResults()
+    const listbox = wrapper.find('[role="listbox"]')
+    for (let i = 0; i < 4; i += 1) {
+      await listbox.trigger('keydown', { key: 'ArrowDown' })
+    }
+    await listbox.trigger('keydown', { key: 'Enter' })
+
+    expect(wrapper.emitted('other')).toHaveLength(1)
   })
 })
