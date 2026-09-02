@@ -2,17 +2,20 @@ import { expect, test } from '@playwright/test'
 
 import {
   E2E_COFFEE_ANALYSIS_ENVELOPE,
-  E2E_SEARCH_AUTO_SELECTED_RESPONSE,
   E2E_SEARCH_DISAMBIGUATE_RESPONSE,
+  E2E_SEARCH_HIGH_CONFIDENCE_RESPONSE,
   E2E_SEARCH_NO_CANDIDATES_RESPONSE,
   E2E_THREAD_ID,
 } from './fixtures'
 
 /**
  * End-to-end walk of the free-text product search flow (2026-08-20 roadmap
- * decision): Start → search screen → disambiguate/auto-select → analysis
- * rendered, plus the no-match fallback. Only the backend HTTP calls are
- * mocked; the real app code (router, stores, components) runs for real.
+ * decision, extended 2026-09-02 with the always-confirm picker): Start →
+ * search screen → disambiguate (even a high-confidence match still lands
+ * here — auto-select was removed) → analysis rendered, plus the no-match
+ * fallback and the "Something else" reset path. Only the backend HTTP
+ * calls are mocked; the real app code (router, stores, components) runs
+ * for real.
  */
 async function mockThreadCreation(page: import('@playwright/test').Page) {
   await page.route('**/api/threads', async (route) => {
@@ -42,7 +45,7 @@ test.describe('free-text product search', () => {
     const results = page.getByRole('listbox', { name: /matching hs product codes/i })
     await expect(results).toBeVisible()
     const options = page.getByRole('option')
-    await expect(options).toHaveCount(3)
+    await expect(options).toHaveCount(4) // 3 candidates + "Something else"
     await expect(options.first()).toContainText('090111')
     await expect(options.first()).toContainText('62% match')
 
@@ -53,12 +56,12 @@ test.describe('free-text product search', () => {
     await expect(page.getByText('HS 090111')).toBeVisible()
   })
 
-  test('a high-confidence query auto-selects and navigates straight to the analysis, skipping disambiguation', async ({
+  test('a high-confidence query still shows the disambiguation picker rather than auto-navigating; picking the candidate opens its analysis', async ({
     page,
   }) => {
     await mockThreadCreation(page)
     await page.route(`**/api/threads/${E2E_THREAD_ID}/search`, async (route) => {
-      await route.fulfill({ json: E2E_SEARCH_AUTO_SELECTED_RESPONSE })
+      await route.fulfill({ json: E2E_SEARCH_HIGH_CONFIDENCE_RESPONSE })
     })
     await page.route(`**/api/threads/${E2E_THREAD_ID}/messages`, async (route) => {
       await route.fulfill({ json: E2E_COFFEE_ANALYSIS_ENVELOPE })
@@ -68,9 +71,40 @@ test.describe('free-text product search', () => {
     await page.getByLabel('Product description').fill('green coffee beans')
     await page.getByRole('button', { name: 'Search' }).click()
 
+    await expect(page).toHaveURL(/\/search$/) // did not auto-navigate
+    const options = page.getByRole('option')
+    await expect(options).toHaveCount(2) // 1 candidate + "Something else"
+    await expect(options.first()).toContainText('090111')
+    await expect(options.first()).toContainText('93% match')
+
+    await options.first().click()
+
     await expect(page).toHaveURL(/\/analysis\/090111$/)
     await expect(page.getByRole('heading', { name: 'Trade analysis' })).toBeVisible()
     await expect(page.getByText('HS 090111')).toBeVisible()
+  })
+
+  test('picking "Something else" clears the search and lets the user redescribe the product', async ({
+    page,
+  }) => {
+    await mockThreadCreation(page)
+    await page.route(`**/api/threads/${E2E_THREAD_ID}/search`, async (route) => {
+      await route.fulfill({ json: E2E_SEARCH_DISAMBIGUATE_RESPONSE })
+    })
+
+    await page.goto('/search')
+    await page.getByLabel('Product description').fill('coffee')
+    await page.getByRole('button', { name: 'Search' }).click()
+
+    const options = page.getByRole('option')
+    await expect(options).toHaveCount(4)
+    await options.last().click() // the trailing "Something else" row
+
+    await expect(page).toHaveURL(/\/search$/) // never navigates
+    await expect(page.getByRole('listbox')).toHaveCount(0)
+    const input = page.getByLabel('Product description')
+    await expect(input).toHaveValue('')
+    await expect(input).toBeFocused()
   })
 
   test('a nonsense query shows a "no matches" empty state with a way back to browsing categories', async ({

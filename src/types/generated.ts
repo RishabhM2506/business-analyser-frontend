@@ -206,14 +206,19 @@ export interface ProductSearchResponse {
   thread_id: string
   query_text: string
   /**
-   * `auto_selected`: `selected_hs_code` is set, navigate straight to the
-   * analysis. `disambiguate`: ask the user to pick from `candidates`.
+   * `disambiguate`: ask the user to pick from `candidates` (at most 5,
+   * ranked best first — always paired client-side with an "or describe it
+   * again" option, `ProductSearchResults.vue`'s own `other` choice).
    * `no_candidates_found`: a normal (non-error) outcome for a query that
    * matched nothing — same principle as `years_no_data` rendering "no data
    * recorded," not a failure.
+   *
+   * There used to be a third value, `auto_selected` (skip straight to the
+   * analysis for a high-confidence match, no confirmation) — removed
+   * 2026-09-02: a search now never auto-navigates on the user's behalf,
+   * however confident. `selected_hs_code` was removed along with it.
    */
-  outcome: 'auto_selected' | 'disambiguate' | 'no_candidates_found'
-  selected_hs_code: string | null
+  outcome: 'disambiguate' | 'no_candidates_found'
   candidates: RankedCandidateOut[]
 }
 

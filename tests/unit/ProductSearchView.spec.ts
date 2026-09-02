@@ -1,6 +1,6 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 
 import { ApiError, apiRequest } from '@/services/api'
@@ -19,8 +19,7 @@ function fixtureResponse(overrides: Partial<ProductSearchResponse> = {}): Produc
   return {
     thread_id: 't1',
     query_text: 'green coffee beans',
-    outcome: 'auto_selected',
-    selected_hs_code: '090111',
+    outcome: 'no_candidates_found',
     candidates: [],
     ...overrides,
   }
@@ -50,12 +49,18 @@ function makeRouter(): Router {
   })
 }
 
+const mountedWrappers: VueWrapper[] = []
+
 async function mountProductSearchView() {
   const router = makeRouter()
   await router.push({ name: ROUTE_NAMES.PRODUCT_SEARCH })
   await router.isReady()
 
-  const wrapper = mount(ProductSearchView, { global: { plugins: [router] } })
+  const wrapper = mount(ProductSearchView, {
+    global: { plugins: [router] },
+    attachTo: document.body, // required for the real document.activeElement to reflect .focus()
+  })
+  mountedWrappers.push(wrapper)
   return { wrapper, router }
 }
 
@@ -72,6 +77,10 @@ describe('ProductSearchView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     mockedApiRequest.mockReset()
+  })
+
+  afterEach(() => {
+    mountedWrappers.splice(0).forEach((wrapper) => wrapper.unmount())
   })
 
   it('disables the Search button until real text is entered', async () => {
@@ -99,17 +108,22 @@ describe('ProductSearchView', () => {
     expect(wrapper.find('[role="status"]').text()).toContain('Searching')
   })
 
-  it('auto-navigates straight to the analysis view on an auto_selected outcome', async () => {
+  it('never auto-navigates, even for a high-confidence disambiguate outcome', async () => {
     mockedApiRequest.mockResolvedValueOnce({ thread_id: 't1' })
     mockedApiRequest.mockResolvedValueOnce(
-      fixtureResponse({ outcome: 'auto_selected', selected_hs_code: '090111' }),
+      fixtureResponse({
+        outcome: 'disambiguate',
+        candidates: [
+          { hs_code: '090111', description: 'Coffee, not roasted', relevance_score: 0.95 },
+        ],
+      }),
     )
     const { wrapper, router } = await mountProductSearchView()
 
     await submit(wrapper, 'green coffee beans')
 
-    expect(router.currentRoute.value.name).toBe(ROUTE_NAMES.ANALYSIS)
-    expect(router.currentRoute.value.params.hsCode).toBe('090111')
+    expect(router.currentRoute.value.name).toBe(ROUTE_NAMES.PRODUCT_SEARCH) // did not navigate away
+    expect(wrapper.text()).toContain('Coffee, not roasted')
   })
 
   it('renders ranked candidates for disambiguation and never auto-navigates for that outcome', async () => {
@@ -117,7 +131,6 @@ describe('ProductSearchView', () => {
     mockedApiRequest.mockResolvedValueOnce(
       fixtureResponse({
         outcome: 'disambiguate',
-        selected_hs_code: null,
         candidates: [
           { hs_code: '090111', description: 'Coffee, not roasted', relevance_score: 0.9 },
           { hs_code: '090121', description: 'Coffee, roasted', relevance_score: 0.5 },
@@ -139,7 +152,6 @@ describe('ProductSearchView', () => {
     mockedApiRequest.mockResolvedValueOnce(
       fixtureResponse({
         outcome: 'disambiguate',
-        selected_hs_code: null,
         candidates: [{ hs_code: '090121', description: 'Coffee, roasted', relevance_score: 0.5 }],
       }),
     )
@@ -153,10 +165,35 @@ describe('ProductSearchView', () => {
     expect(router.currentRoute.value.params.hsCode).toBe('090121')
   })
 
+  it('selecting "Something else" clears the query and results and refocuses the input', async () => {
+    mockedApiRequest.mockResolvedValueOnce({ thread_id: 't1' })
+    mockedApiRequest.mockResolvedValueOnce(
+      fixtureResponse({
+        outcome: 'disambiguate',
+        candidates: [{ hs_code: '090121', description: 'Coffee, roasted', relevance_score: 0.5 }],
+      }),
+    )
+    const { wrapper, router } = await mountProductSearchView()
+    await submit(wrapper, 'coffee')
+
+    const options = wrapper.findAll('[role="option"]')
+    // Distinct coordinates from the disambiguation-candidate click test
+    // above — the shared double-click navigation guard (router.ts's
+    // module-level `navigationLock`, 400ms/40px) would otherwise mistake
+    // these two separate tests' bare (0,0) clicks for one rapid double-click.
+    await options[options.length - 1]?.trigger('click', { clientX: 999, clientY: 999 }) // "Something else"
+    await flushPromises()
+
+    expect(router.currentRoute.value.name).toBe(ROUTE_NAMES.PRODUCT_SEARCH) // never navigates
+    expect(wrapper.find<HTMLInputElement>('input').element.value).toBe('')
+    expect(wrapper.find('[role="listbox"]').exists()).toBe(false)
+    expect(wrapper.find<HTMLInputElement>('input').element).toBe(document.activeElement)
+  })
+
   it('shows an explicit empty state for no_candidates_found, distinct from an error', async () => {
     mockedApiRequest.mockResolvedValueOnce({ thread_id: 't1' })
     mockedApiRequest.mockResolvedValueOnce(
-      fixtureResponse({ outcome: 'no_candidates_found', selected_hs_code: null, candidates: [] }),
+      fixtureResponse({ outcome: 'no_candidates_found', candidates: [] }),
     )
     const { wrapper } = await mountProductSearchView()
 

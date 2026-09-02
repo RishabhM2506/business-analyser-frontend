@@ -3,10 +3,20 @@
 // the same virtualised, WAI-ARIA listbox pattern `ItemList.vue` establishes
 // (persistently-visible list, not a combobox popup: the listbox element
 // itself is the tab stop and carries aria-activedescendant). A short list
-// (typically <= 8 candidates, `app/search/rerank.py`'s `RerankOutput.
-// ranked_candidates` cap) doesn't strictly need virtualization, but reusing
-// VirtualList keeps this component's keyboard/focus behavior identical to
-// the existing pickers rather than a third, subtly-different implementation.
+// (at most `app.search.service.MAX_DISAMBIGUATE_CANDIDATES` = 5 candidates)
+// doesn't strictly need virtualization, but reusing VirtualList keeps this
+// component's keyboard/focus behavior identical to the existing pickers
+// rather than a third, subtly-different implementation.
+//
+// Always ends with one extra, non-candidate row — "Something else" — so a
+// search never leaves the user stuck picking the least-wrong option
+// (2026-09-02 product decision, `app.search.service`'s own module
+// docstring: every search that finds anything real ends on this picker,
+// never auto-navigates, so the picker itself must always offer a way out).
+// Modeled as one more entry in the *same* listbox (not a separate button
+// outside it) so arrow-key navigation moves through the real candidates and
+// then to "Something else" as one continuous list, matching how a screen
+// reader or keyboard-only user would expect a single picker to behave.
 import { computed, ref, useId, watch } from 'vue'
 
 import { isListNavigationKey, nextActiveIndex } from '@/components/common/listNavigation'
@@ -18,7 +28,14 @@ const ITEM_HEIGHT = 64
 const MAX_LIST_HEIGHT = 480
 
 const props = defineProps<{ candidates: RankedCandidateOut[] }>()
-const emit = defineEmits<{ select: [candidate: RankedCandidateOut] }>()
+const emit = defineEmits<{ select: [candidate: RankedCandidateOut]; other: [] }>()
+
+type DisplayItem = { kind: 'candidate'; candidate: RankedCandidateOut } | { kind: 'other' }
+
+const displayItems = computed<DisplayItem[]>(() => [
+  ...props.candidates.map((candidate): DisplayItem => ({ kind: 'candidate', candidate })),
+  { kind: 'other' },
+])
 
 const activeIndex = ref(-1)
 const listboxId = useId()
@@ -31,7 +48,7 @@ watch(
 )
 
 const activeOptionId = computed(() =>
-  activeIndex.value >= 0 && activeIndex.value < props.candidates.length
+  activeIndex.value >= 0 && activeIndex.value < displayItems.value.length
     ? optionId(activeIndex.value)
     : undefined,
 )
@@ -45,30 +62,35 @@ function formatConfidence(score: number): string {
 }
 
 /** Mirrors ItemList.vue's identical M18/Frontend-QA#6 guard. */
-function selectCandidate(candidate: RankedCandidateOut, pointerEvent?: MouseEvent): void {
+function activateItem(item: DisplayItem, pointerEvent?: MouseEvent): void {
   if (pointerEvent && isNavigationBlocked(pointerEvent.clientX, pointerEvent.clientY)) {
     return
   }
   if (pointerEvent) {
     markNavigating(pointerEvent.clientX, pointerEvent.clientY)
   }
-  emit('select', candidate)
+  if (item.kind === 'other') {
+    emit('other')
+    return
+  }
+  emit('select', item.candidate)
 }
 
 function onKeydown(event: KeyboardEvent): void {
+  const items = displayItems.value
   if (isListNavigationKey(event.key)) {
-    if (props.candidates.length === 0) {
+    if (items.length === 0) {
       return
     }
     event.preventDefault()
-    activeIndex.value = nextActiveIndex(activeIndex.value, event.key, props.candidates.length)
+    activeIndex.value = nextActiveIndex(activeIndex.value, event.key, items.length)
     return
   }
   if (event.key === 'Enter' || event.key === ' ') {
-    const candidate = props.candidates[activeIndex.value]
-    if (candidate) {
+    const item = items[activeIndex.value]
+    if (item) {
       event.preventDefault()
-      selectCandidate(candidate)
+      activateItem(item)
     }
   }
 }
@@ -76,7 +98,7 @@ function onKeydown(event: KeyboardEvent): void {
 
 <template>
   <VirtualList
-    :items="candidates"
+    :items="displayItems"
     :item-height="ITEM_HEIGHT"
     :max-height="MAX_LIST_HEIGHT"
     :active-index="activeIndex"
@@ -91,6 +113,7 @@ function onKeydown(event: KeyboardEvent): void {
   >
     <template #default="{ item, index }">
       <li
+        v-if="item.kind === 'candidate'"
         :id="optionId(index)"
         role="option"
         :aria-selected="index === activeIndex ? 'true' : 'false'"
@@ -98,17 +121,40 @@ function onKeydown(event: KeyboardEvent): void {
         class="search-results__option"
         :class="{ 'search-results__option--active': index === activeIndex }"
         @mousedown.prevent
-        @click="(event) => selectCandidate(item, event)"
-        @keydown.enter.prevent="selectCandidate(item)"
-        @keydown.space.prevent="selectCandidate(item)"
+        @click="(event) => activateItem(item, event)"
+        @keydown.enter.prevent="activateItem(item)"
+        @keydown.space.prevent="activateItem(item)"
         @mouseenter="activeIndex = index"
         @focusin="activeIndex = index"
       >
         <div class="search-results__main">
-          <span class="search-results__code">{{ item.hs_code }}</span>
-          <span class="search-results__desc" :title="item.description">{{ item.description }}</span>
+          <span class="search-results__code">{{ item.candidate.hs_code }}</span>
+          <span class="search-results__desc" :title="item.candidate.description">{{
+            item.candidate.description
+          }}</span>
         </div>
-        <span class="search-results__confidence">{{ formatConfidence(item.relevance_score) }}</span>
+        <span class="search-results__confidence">{{
+          formatConfidence(item.candidate.relevance_score)
+        }}</span>
+      </li>
+      <li
+        v-else
+        :id="optionId(index)"
+        role="option"
+        :aria-selected="index === activeIndex ? 'true' : 'false'"
+        tabindex="-1"
+        class="search-results__option search-results__option--other"
+        :class="{ 'search-results__option--active': index === activeIndex }"
+        @mousedown.prevent
+        @click="(event) => activateItem(item, event)"
+        @keydown.enter.prevent="activateItem(item)"
+        @keydown.space.prevent="activateItem(item)"
+        @mouseenter="activeIndex = index"
+        @focusin="activeIndex = index"
+      >
+        <div class="search-results__main">
+          <span class="search-results__desc">Something else — describe it again</span>
+        </div>
       </li>
     </template>
   </VirtualList>
@@ -137,6 +183,11 @@ function onKeydown(event: KeyboardEvent): void {
 
 .search-results__option--active {
   background-color: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+}
+
+.search-results__option--other .search-results__desc {
+  color: var(--color-text-muted);
+  font-style: italic;
 }
 
 .search-results__main {
