@@ -9,14 +9,15 @@ import {
   FIXTURE_EXPORTS_TABLE,
   FIXTURE_IMPORTS_TABLE,
   FIXTURE_IMPORTS_TABLE_WITH_FETCH_ISSUE,
+  FIXTURE_IMPORTS_TABLE_WITH_HIGH_VOLATILITY_PARTNER,
   FIXTURE_IMPORTS_TABLE_WITH_NO_DATA_YEAR,
 } from '../fixtures/tradeAnalysisResponse'
 
 describe('TradeTable', () => {
-  it('renders one row per country and the title as a heading', () => {
+  it('renders one row per country, plus a trailing rest-of-world row, and the title as a heading', () => {
     const wrapper = mount(TradeTable, { props: { title: 'Imports', table: FIXTURE_IMPORTS_TABLE } })
     expect(wrapper.find('h3').text()).toBe('Imports')
-    expect(wrapper.findAll('tbody tr')).toHaveLength(2)
+    expect(wrapper.findAll('tbody tr')).toHaveLength(3) // 2 real countries + rest_of_world
   })
 
   it('renders rows in rank order even when the input array is not pre-sorted', () => {
@@ -202,5 +203,82 @@ describe('TradeTable', () => {
     const wrapper = mount(TradeTable, { props: { title: 'Imports', table: hostile } })
     expect(wrapper.find('img').exists()).toBe(false)
     expect(wrapper.text()).toContain('<img src=x onerror=alert(1)>')
+  })
+
+  // --- rest_of_world / world_total / hhi (2026-09-02, Step 3 hardening) ---
+
+  it('renders the rest_of_world row distinctly, after the ranked countries, with its own values', () => {
+    const wrapper = mount(TradeTable, { props: { title: 'Imports', table: FIXTURE_IMPORTS_TABLE } })
+    const rows = wrapper.findAll('tbody tr')
+    const lastRow = rows[rows.length - 1]
+    expect(lastRow?.text()).toContain('All Other Countries')
+    expect(lastRow?.classes()).toContain('trade-table__row--rest-of-world')
+    const cells = lastRow?.findAll('td') ?? []
+    expect(cells[2]?.text()).toBe('$150,000.00') // 2021
+    expect(cells[7]?.text()).toBe('$800,000.00') // 5-yr total
+  })
+
+  it('does not render a rest_of_world row when the table has none', () => {
+    const wrapper = mount(TradeTable, { props: { title: 'Exports', table: FIXTURE_EXPORTS_TABLE } })
+    expect(wrapper.text()).not.toContain('All Other Countries')
+    expect(wrapper.find('.trade-table__row--rest-of-world').exists()).toBe(false)
+  })
+
+  it('shows the HHI concentration footnote when present', () => {
+    const wrapper = mount(TradeTable, { props: { title: 'Imports', table: FIXTURE_IMPORTS_TABLE } })
+    expect(wrapper.text()).toContain('Market concentration (HHI): 0.34')
+  })
+
+  it('does not show the HHI footnote when absent (older/stale fixture shape)', () => {
+    const wrapper = mount(TradeTable, {
+      props: { title: 'Imports', table: FIXTURE_IMPORTS_TABLE_WITH_NO_DATA_YEAR },
+    })
+    expect(wrapper.text()).not.toContain('Market concentration')
+  })
+
+  it('flags a real world-total reconciliation mismatch, naming the affected year', () => {
+    const wrapper = mount(TradeTable, { props: { title: 'Imports', table: FIXTURE_IMPORTS_TABLE } })
+    expect(wrapper.text()).toContain('do not reconcile')
+    expect(wrapper.text()).toContain('2023')
+  })
+
+  it('does not show the reconciliation-mismatch footnote when everything reconciles', () => {
+    const wrapper = mount(TradeTable, { props: { title: 'Exports', table: FIXTURE_EXPORTS_TABLE } })
+    expect(wrapper.text()).not.toContain('do not reconcile')
+  })
+
+  // --- CAGR / volatility columns (2026-09-02, Step 3 hardening) -----------
+
+  it('renders each row’s CAGR as a signed percentage', () => {
+    const wrapper = mount(TradeTable, { props: { title: 'Imports', table: FIXTURE_IMPORTS_TABLE } })
+    const rows = wrapper.findAll('tbody tr')
+    const usRow = rows.find((row) => row.text().includes('United States'))
+    const germanyRow = rows.find((row) => row.text().includes('Germany'))
+    const usCells = usRow?.findAll('td') ?? []
+    const germanyCells = germanyRow?.findAll('td') ?? []
+    expect(usCells[8]?.text()).toBe('-0.3%') // negative CAGR
+    expect(germanyCells[8]?.text()).toBe('+0.4%') // positive CAGR
+  })
+
+  it('renders a "—" for a null CAGR, not a fabricated figure', () => {
+    const wrapper = mount(TradeTable, {
+      props: { title: 'Imports', table: FIXTURE_IMPORTS_TABLE_WITH_HIGH_VOLATILITY_PARTNER },
+    })
+    const rows = wrapper.findAll('tbody tr')
+    const spikyRow = rows.find((row) => row.text().includes('Spiky'))
+    const cells = spikyRow?.findAll('td') ?? []
+    expect(cells[8]?.text()).toBe('—')
+  })
+
+  it('shows a "High" volatility badge only for a partner flagged is_high_volatility', () => {
+    const wrapper = mount(TradeTable, {
+      props: { title: 'Imports', table: FIXTURE_IMPORTS_TABLE_WITH_HIGH_VOLATILITY_PARTNER },
+    })
+    const rows = wrapper.findAll('tbody tr')
+    const spikyRow = rows.find((row) => row.text().includes('Spiky'))
+    const steadyRow = rows.find((row) => row.text().includes('Steady'))
+    expect(spikyRow?.find('.trade-table__volatility-badge').exists()).toBe(true)
+    expect(spikyRow?.find('.trade-table__volatility-badge').text()).toBe('High')
+    expect(steadyRow?.find('.trade-table__volatility-badge').exists()).toBe(false)
   })
 })

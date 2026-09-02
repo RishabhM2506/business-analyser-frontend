@@ -9,10 +9,14 @@ import { storeToRefs } from 'pinia'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 
 import DutyVerificationTable from '@/components/report/DutyVerificationTable.vue'
+import LlmDatapointNote from '@/components/report/LlmDatapointNote.vue'
+import PartnerGrowthTable from '@/components/report/PartnerGrowthTable.vue'
 import {
+  formatCagr,
   formatInrPaise,
   formatPercent,
   formatTonnes,
+  formatVolatility,
   MISSING_VALUE_DISPLAY,
 } from '@/components/report/reportValueFormat'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -258,6 +262,28 @@ watch(facts, (f) => {
         </div>
       </section>
 
+      <section
+        v-if="facts.overall_cagr !== null || facts.overall_volatility !== null"
+        class="view__card"
+      >
+        <h2 class="view__section-title">Growth &amp; volatility</h2>
+        <dl class="view__fact-grid">
+          <div>
+            <dt>Overall CAGR</dt>
+            <dd>{{ formatCagr(facts.overall_cagr) }}</dd>
+          </div>
+          <div>
+            <dt>Overall volatility</dt>
+            <dd>{{ formatVolatility(facts.overall_volatility) }}</dd>
+          </div>
+        </dl>
+        <PartnerGrowthTable
+          :annual-series="facts.annual_series"
+          :cagr-by-partner="facts.cagr_by_partner"
+          :volatility-by-partner="facts.volatility_by_partner"
+        />
+      </section>
+
       <section v-if="facts.mismatch_checks.length > 0" class="view__card">
         <h2 class="view__section-title">Cross-source mismatch checks</h2>
         <p class="view__mismatch-intro">
@@ -319,6 +345,7 @@ watch(facts, (f) => {
             </p>
           </template>
           <EmptyState v-else :message="statusNote(facts.mandi_price.status)" />
+          <LlmDatapointNote :datapoints="facts.mandi_price_llm_datapoints" />
         </section>
 
         <section class="view__card">
@@ -333,6 +360,7 @@ watch(facts, (f) => {
             </p>
           </template>
           <EmptyState v-else :message="statusNote(facts.msp.status)" />
+          <LlmDatapointNote :datapoints="facts.msp_llm_datapoints" />
         </section>
 
         <section class="view__card">
@@ -368,6 +396,7 @@ watch(facts, (f) => {
             </dl>
           </template>
           <EmptyState v-else :message="statusNote(facts.international_production.status)" />
+          <LlmDatapointNote :datapoints="facts.international_production_llm_datapoints" />
         </section>
       </template>
 

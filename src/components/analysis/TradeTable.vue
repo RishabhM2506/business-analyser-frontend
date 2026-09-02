@@ -8,7 +8,7 @@ import { computed } from 'vue'
 
 import type { CountryRow, TradeTable } from '@/types/generated'
 
-import { formatTradeValue } from './tradeValueFormat'
+import { formatCagr, formatRatio, formatTradeValue } from './tradeValueFormat'
 
 const props = defineProps<{ title: string; table: TradeTable }>()
 
@@ -73,6 +73,22 @@ function isProvisional(year: number): boolean {
 const hasMissingData = computed(() =>
   props.table.rows.some((row) => Object.values(row.values_by_year).some((value) => value === null)),
 )
+
+// 2026-09-02, Step 3 hardening (Concern 1: "preserve the denominator") —
+// rendered as its own row, styled distinctly, never counted toward
+// `rows.length` in the caption/title (it isn't a ranked partner).
+const restOfWorld = computed(() => props.table.rest_of_world ?? null)
+
+// Only surfaced when at least one year actually has a real reconciliation
+// verdict to report — a table with no `world_total_comtrade` data at all
+// (e.g. an older/stale fixture) must not show a misleading blank check.
+const reconciliationMismatchYears = computed(() => {
+  const reconciles = props.table.world_total_reconciles ?? {}
+  return Object.entries(reconciles)
+    .filter(([, value]) => value === false)
+    .map(([year]) => year)
+    .sort()
+})
 </script>
 
 <template>
@@ -116,6 +132,8 @@ const hasMissingData = computed(() =>
                 >
               </th>
               <th scope="col" class="trade-table__value">5-yr total</th>
+              <th scope="col" class="trade-table__value">CAGR</th>
+              <th scope="col" class="trade-table__value">Volatility</th>
             </tr>
           </thead>
           <tbody>
@@ -126,12 +144,51 @@ const hasMissingData = computed(() =>
                 {{ formatTradeValue(row.values_by_year[String(year)]) }}
               </td>
               <td class="trade-table__value">{{ formatTradeValue(row.cumulative_5yr) }}</td>
+              <td class="trade-table__value">{{ formatCagr(row.cagr) }}</td>
+              <td class="trade-table__value">
+                <span v-if="row.is_high_volatility" class="trade-table__volatility-badge"
+                  >High</span
+                >
+                <span v-else>—</span>
+              </td>
+            </tr>
+            <tr v-if="restOfWorld" class="trade-table__row--rest-of-world">
+              <td>{{ restOfWorld.rank }}</td>
+              <td>{{ restOfWorld.partner_country }}</td>
+              <td v-for="year in table.years" :key="year" class="trade-table__value">
+                {{ formatTradeValue(restOfWorld.values_by_year[String(year)]) }}
+              </td>
+              <td class="trade-table__value">{{ formatTradeValue(restOfWorld.cumulative_5yr) }}</td>
+              <td class="trade-table__value">{{ formatCagr(restOfWorld.cagr) }}</td>
+              <td class="trade-table__value">
+                <span v-if="restOfWorld.is_high_volatility" class="trade-table__volatility-badge"
+                  >High</span
+                >
+                <span v-else>—</span>
+              </td>
             </tr>
           </tbody>
         </table>
       </div>
 
       <p class="trade-table__footnote">Values in {{ table.unit }}.</p>
+      <p v-if="restOfWorld" class="trade-table__footnote">
+        "All Other Countries" sums every real trading partner ranked below the top
+        {{ table.rows.length }} shown above, so the table's total still reflects every partner, not
+        just the ones listed individually.
+      </p>
+      <p v-if="table.hhi != null" class="trade-table__footnote">
+        Market concentration (HHI): {{ formatRatio(table.hhi) }} — ranges 0 (many equally-sized
+        partners) to 1 (a single partner accounts for all trade).
+      </p>
+      <p
+        v-if="reconciliationMismatchYears.length > 0"
+        class="trade-table__footnote trade-table__footnote--issue"
+      >
+        ⚠ The partner totals shown for {{ reconciliationMismatchYears.join(', ') }} do not reconcile
+        with UN Comtrade's own reported world total for this product — this can indicate a data
+        revision or reporting gap upstream, not necessarily an error in this table.
+      </p>
       <p v-if="provisionalYears.length > 0" class="trade-table__footnote">
         * Provisional — not yet finalized by the data source: {{ provisionalYears.join(', ') }}.
       </p>
@@ -247,6 +304,30 @@ const hasMissingData = computed(() =>
 .trade-table__value {
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+/* Visually distinct from the ranked-partner rows above it (italic, muted) —
+ * a synthetic total, not a real trading partner (2026-09-02, Step 3
+ * hardening). Matches the "Something else" row's own muted/italic
+ * treatment in ProductSearchResults.vue for the same "not a real ranked
+ * item" signal. */
+.trade-table__row--rest-of-world {
+  font-style: italic;
+  color: var(--color-text-muted);
+}
+
+/* Reuses --color-danger/-bg, not an invented "warning" token — already
+ * verified for AA contrast in both themes (tokens.css's own comment,
+ * finding M16/Frontend-QA#4). */
+.trade-table__volatility-badge {
+  display: inline-block;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  background-color: var(--color-danger-bg);
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  font-style: normal;
 }
 
 .trade-table__footnote {

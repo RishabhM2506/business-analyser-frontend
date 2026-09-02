@@ -90,6 +90,18 @@ describe('AnalysisView', () => {
     expect(mockedApiRequest).toHaveBeenCalledTimes(2)
   })
 
+  it('renders the trade balance section with the backend-supplied figures (2026-09-02, Step 3 hardening)', async () => {
+    mockedApiRequest.mockResolvedValueOnce({ thread_id: 't1' })
+    mockedApiRequest.mockResolvedValueOnce({ type: 'final', data: FIXTURE_TRADE_ANALYSIS_RESPONSE })
+    const { wrapper } = await mountAnalysisView('010121')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Trade balance')
+    expect(wrapper.text()).toContain('net importer')
+    // The cumulative figure taken verbatim from the fixture.
+    expect(wrapper.text()).toContain('-$3,425,000.00')
+  })
+
   it('sends no years/top_n by default, then re-queries with the user-chosen values on Apply', async () => {
     mockedApiRequest.mockResolvedValueOnce({ thread_id: 't1' })
     mockedApiRequest.mockResolvedValueOnce({ type: 'final', data: FIXTURE_TRADE_ANALYSIS_RESPONSE })

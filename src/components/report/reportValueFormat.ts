@@ -59,3 +59,39 @@ export function formatTonnes(value: string | null): string {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? `${parsed.toLocaleString('en-IN')} t` : MISSING_VALUE_DISPLAY
 }
+
+// 2026-09-02, Step 4 hardening — `overall_cagr`/`cagr_by_partner` are
+// plain ratios (0.082 means 8.2%), not the already-percentage-scaled
+// Decimal strings `formatPercent` above expects (duty rates etc. are
+// stored as "20" meaning 20%) — a distinct formatter, not a reuse, to
+// avoid a silent double-scaling bug if the two were ever conflated.
+const ratioPercentFormatter = new Intl.NumberFormat('en-US', {
+  style: 'percent',
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+  signDisplay: 'exceptZero',
+})
+
+/** For `overall_cagr`/`cagr_by_partner` — `null` (not enough real data to
+ * compute honestly) renders as the missing-data marker, never a fabricated
+ * growth rate. */
+export function formatCagr(value: number | null): string {
+  if (value === null) {
+    return MISSING_VALUE_DISPLAY
+  }
+  return ratioPercentFormatter.format(value)
+}
+
+const ratioFormatter = new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})
+
+/** For `overall_volatility`/`volatility_by_partner` (coefficient of
+ * variation — a ratio, not a percentage). */
+export function formatVolatility(value: number | null): string {
+  if (value === null) {
+    return MISSING_VALUE_DISPLAY
+  }
+  return ratioFormatter.format(value)
+}

@@ -30,6 +30,10 @@ const BASE_FACTS: Facts = {
   month_wise_current_year: [],
   unit_value_trend: [],
   hhi_by_year: [],
+  overall_cagr: null,
+  overall_volatility: null,
+  cagr_by_partner: {},
+  volatility_by_partner: {},
   landed_cost: {
     is_complete: false,
     landed_cost_inr_paise_per_kg: null,
@@ -111,6 +115,10 @@ const BASE_FACTS: Facts = {
     india_production_tonnes: null,
     world_production_tonnes: '10592.010',
   },
+  llm_datapoints: [],
+  mandi_price_llm_datapoints: [],
+  msp_llm_datapoints: [],
+  international_production_llm_datapoints: [],
 }
 
 function fixtureResponse(overrides: Partial<Facts> = {}): TradeReportResponse {
@@ -477,5 +485,64 @@ describe('TradeReportView', () => {
     await flushPromises()
 
     expect(wrapper.find('.view__metrics-table').exists()).toBe(false)
+  })
+
+  it('renders the growth & volatility section with overall figures when present', async () => {
+    mockedApiRequest.mockResolvedValueOnce({ thread_id: 't1' })
+    mockedApiRequest.mockResolvedValueOnce(
+      fixtureResponse({ overall_cagr: 0.082, overall_volatility: 0.35 }),
+    )
+    const { wrapper } = await mountTradeReportView()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Growth & volatility')
+    expect(wrapper.text()).toContain('+8.2%')
+    expect(wrapper.text()).toContain('0.35')
+  })
+
+  it('renders no growth & volatility section when both overall figures are null', async () => {
+    mockedApiRequest.mockResolvedValueOnce({ thread_id: 't1' })
+    mockedApiRequest.mockResolvedValueOnce(
+      fixtureResponse({ overall_cagr: null, overall_volatility: null }),
+    )
+    const { wrapper } = await mountTradeReportView()
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('Growth & volatility')
+  })
+
+  it('renders a cited llm_datapoints entry alongside the verified mandi price card, never in place of it', async () => {
+    mockedApiRequest.mockResolvedValueOnce({ thread_id: 't1' })
+    mockedApiRequest.mockResolvedValueOnce(
+      fixtureResponse({
+        mandi_price: {
+          status: 'NOT_FOUND',
+          matched_commodity: null,
+          modal_price_inr_paise_per_qtl: null,
+          price_date: null,
+          market: null,
+          state: null,
+        },
+        mandi_price_llm_datapoints: [
+          {
+            field_name: 'mandi_price',
+            effective_period: '2026-08',
+            value: { modal_price_inr_paise_per_qtl: 850000 },
+            source_authority: 'Test Authority',
+            source_reference: 'Test bulletin',
+            source_url: 'https://example.test/bulletin',
+            verified_date: '2026-09-02',
+          },
+        ],
+      }),
+    )
+    const { wrapper } = await mountTradeReportView()
+    await flushPromises()
+
+    // The verified card's own honest NOT_FOUND state still renders...
+    expect(wrapper.text()).toContain('No matching data found in this pipeline yet.')
+    // ...alongside, never instead of, the cited datapoint.
+    expect(wrapper.text()).toContain('Cited, not independently verified')
+    expect(wrapper.text()).toContain('Test Authority')
   })
 })

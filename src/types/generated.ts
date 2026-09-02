@@ -73,6 +73,24 @@ export interface CountryRow {
   cumulative_5yr: number
   /** Rank by `cumulative_5yr`, per Gate 0 answer. */
   rank: number
+  /**
+   * 2026-09-02, Step 3 hardening: sample stdev / mean of this partner's own
+   * real-valued years — a scale-independent volatility signal. `null` when
+   * there aren't at least 2 real years or the mean is exactly 0 (an
+   * undefined denominator, never a fabricated ratio). Optional for backward
+   * compatibility with any stale fixture/mock data predating this field.
+   */
+  coefficient_of_variation?: number | null
+  /** `coefficient_of_variation > HIGH_VOLATILITY_COV_THRESHOLD` — a flag,
+   * not a fabricated derived percentage. Optional, same reason as above. */
+  is_high_volatility?: boolean
+  /**
+   * Compound annual growth rate between this partner's own earliest and
+   * latest real-valued years (not necessarily the table's full year range).
+   * `null` when there aren't 2 distinct real years or the earliest real
+   * value isn't strictly positive. Optional, same reason as above.
+   */
+  cagr?: number | null
 }
 
 /** Mirrors `TradeTable` (Pydantic). */
@@ -118,6 +136,48 @@ export interface TradeTable {
   excluded_partner_codes: string[]
   /** Top 10, ranked. */
   rows: CountryRow[]
+  /**
+   * 2026-09-02, Step 3 hardening (Concern 1: "preserve the denominator"):
+   * every real country ranked below the top-N cutoff, summed into one row
+   * — kept separate from `rows`, never an 11th entry in it. `null`/absent
+   * when nothing was truncated. Optional for backward compatibility with
+   * any stale fixture/mock data predating this field.
+   */
+  rest_of_world?: CountryRow | null
+  /**
+   * Comtrade's own `partnerCode="0"` ("World") row's value per year — an
+   * independent ground truth for what `rows` + `rest_of_world` should sum
+   * to. Keyed by year (string on the wire, same `Number(key)` caveat as
+   * `values_by_year`). `null` for a year Comtrade didn't report a World
+   * total for at all. Optional, same reason as above.
+   */
+  world_total_comtrade?: Record<string, number | null>
+  /**
+   * Whether `rows` + `rest_of_world` reconciles (within 1%) to
+   * `world_total_comtrade` for that year. `null` when either side is
+   * missing for that year. Optional, same reason as above.
+   */
+  world_total_reconciles?: Record<string, boolean | null>
+  /**
+   * Herfindahl-Hirschman concentration index (0-1, higher = more
+   * concentrated) over every real country's own cumulative value — not
+   * just the shown top-N. `null` when the real-country total isn't
+   * strictly positive. Optional, same reason as above.
+   */
+  hhi?: number | null
+}
+
+/**
+ * Mirrors `TradeBalance` (Pydantic) — net trade (exports minus imports)
+ * using each side's Comtrade-reported World total as the denominator.
+ * Positive means India is a net exporter of the product for that
+ * year/window; negative means net importer. 2026-09-02, Step 3 hardening.
+ */
+export interface TradeBalance {
+  /** `null` for a year where either side's World total is missing. */
+  by_year: Record<string, number | null>
+  /** Sum of the non-`null` yearly balances; `null` only if every year is. */
+  cumulative: number | null
 }
 
 /** Mirrors `TradeAnalysisResponse` (Pydantic) — the success shape of `POST /threads/{id}/messages`. */
@@ -128,6 +188,9 @@ export interface TradeAnalysisResponse {
   item_description: string
   imports: TradeTable
   exports: TradeTable
+  /** 2026-09-02, Step 3 hardening — always present (backend computes it
+   * alongside `imports`/`exports`, never independently missing). */
+  trade_balance: TradeBalance
   analytical_summary: string
   provenance: Provenance
 }
@@ -343,6 +406,8 @@ export interface ReportWindow {
 export interface ReportPartnerFact {
   rank: number
   country: string
+  /** 2026-09-02, Step 4 hardening — joins against `Facts.cagr_by_partner`/`volatility_by_partner`, both keyed by this same raw code. */
+  partner_country_code: string
   value_inr_paise: number
   status: string
 }
@@ -398,6 +463,25 @@ export interface CoverageFact {
 }
 
 /**
+ * Mirrors `LlmDatapointFact` (Pydantic, `app/report/facts.py`) — one real,
+ * cited search result for a field the verified analytics/ref layer has
+ * nothing for (2026-09-02, Step 4 hardening, Concern 2). `value` is a
+ * generic object, not a specific typed shape — see that Pydantic model's
+ * own docstring for why. Always shown *alongside*, never in place of, the
+ * verified field it backs up — `source_url` is `null` when the citation
+ * isn't a URL.
+ */
+export interface LlmDatapointFact {
+  field_name: string
+  effective_period: string
+  value: Record<string, unknown>
+  source_authority: string
+  source_reference: string
+  source_url: string | null
+  verified_date: string
+}
+
+/**
  * Mirrors `Facts` (Pydantic, `app/report/facts.py`) — the complete frozen
  * contract document every numeral in `narrative` traces back to. This
  * repo's own `AnalysisView`/`TradeTable` already render `annual_series` in a
@@ -416,6 +500,16 @@ export interface Facts {
   month_wise_current_year: unknown[]
   unit_value_trend: UnitValueTrendYear[]
   hhi_by_year: HhiYear[]
+  /**
+   * 2026-09-02, Step 4 hardening (Concern 1: more metrics, computed from
+   * whatever real data exists) — `null` per-partner/overall whenever
+   * there isn't honestly enough real data. Same live-derived-from-
+   * already-read-rows shape as `hhi_by_year`, not fabricated.
+   */
+  overall_cagr: number | null
+  overall_volatility: number | null
+  cagr_by_partner: Record<string, number | null>
+  volatility_by_partner: Record<string, number | null>
   landed_cost: LandedCostResult | null
   landed_cost_as_of_period: string | null
   mismatch_checks: MismatchCheckFact[]
@@ -426,6 +520,17 @@ export interface Facts {
   mandi_price: MandiPriceFact
   msp: MspFact
   international_production: InternationalProductionFact
+  /**
+   * 2026-09-02, Step 4 hardening (Concern 2: cited LLM-sourced
+   * supplementary data points) — every real, cited search result for
+   * this product, plus a filtered slice per backfillable field. Empty
+   * arrays (not the fields being absent) when nothing has been searched
+   * for this product yet.
+   */
+  llm_datapoints: LlmDatapointFact[]
+  mandi_price_llm_datapoints: LlmDatapointFact[]
+  msp_llm_datapoints: LlmDatapointFact[]
+  international_production_llm_datapoints: LlmDatapointFact[]
 }
 
 /**
